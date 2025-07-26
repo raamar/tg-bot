@@ -10,7 +10,7 @@ importers:
     dependencies:
       bullmq:
         specifier: ^5.56.5
-        version: 5.56.5
+        version: 5.56.7
       express:
         specifier: ^5.1.0
         version: 5.1.0
@@ -21,9 +21,6 @@ importers:
       '@types/express':
         specifier: ^5.0.3
         version: 5.0.3
-      '@types/node':
-        specifier: ^24.1.0
-        version: 24.1.0
       ts-node-dev:
         specifier: ^2.0.0
         version: 2.0.0(@types/node@24.1.0)(typescript@5.8.3)
@@ -172,8 +169,8 @@ packages:
   buffer-from@1.1.2:
     resolution: {integrity: sha512-E+XQCRwSbaaiChtv6k6Dwgc+bx+Bs6vuKJHHl5kox/BaKbhiXzqQOwK4cO22yElGp2OCmjwVhT3HmxgyPGnJfQ==}
 
-  bullmq@5.56.5:
-    resolution: {integrity: sha512-nhcVxoE9Y0YUuNYtvaD+N0Bk2kqcU+rXzJwdQIr8i8qC/fxoghwUYb9a+CidTv24pi1eqstLnBoa8xkR/P7Mdw==}
+  bullmq@5.56.7:
+    resolution: {integrity: sha512-Aa4Y7rmkuZOuyHvitGd2rSETgQ0SMawPD0XVsU9gAUg9Q4bwNpSD9ZDVcWGhfAQAUZFJH82JUmLsm0B59Prmtg==}
 
   bytes@3.1.2:
     resolution: {integrity: sha512-/Nf7TyzTx6S3yRJObOAV7956r8cr2+Oj8AC5dt8wSP3BQAoeX58NoHyCU8P8zGkNXStjTSi6fzO6F0pBdcYbEg==}
@@ -813,7 +810,7 @@ snapshots:
 
   buffer-from@1.1.2: {}
 
-  bullmq@5.56.5:
+  bullmq@5.56.7:
     dependencies:
       cron-parser: 4.9.0
       ioredis: 5.6.1
