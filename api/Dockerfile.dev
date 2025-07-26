@@ -1,0 +1,11 @@
+FROM node:20-slim
+
+WORKDIR /app
+
+RUN npm install -g pnpm
+
+COPY package*.json ./
+
+COPY package.json pnpm-lock.yaml ./
+
+CMD ["sh", "-c", "pnpm run dev"]

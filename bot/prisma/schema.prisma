@@ -1,0 +1,58 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Message {
+  id      String @id @default(uuid())
+  message String
+}
+
+model User {
+  id            String        @id @default(uuid())
+  telegramId    String        @unique
+  username      String?
+  firstName     String?
+  lastName      String?
+  refSource     String?
+  stage         Int           @default(1)
+  paymentStatus PaymentStatus @default(NONE)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  funnelProgress FunnelProgress?
+  payments       Payment[]
+}
+
+model FunnelProgress {
+  id        String    @id @default(uuid())
+  user      User      @relation(fields: [userId], references: [id])
+  userId    String    @unique
+  stage     Int
+  startedAt DateTime  @default(now())
+  nextRunAt DateTime?
+  completed Boolean   @default(false)
+}
+
+model Payment {
+  id        String        @id @default(uuid())
+  user      User          @relation(fields: [userId], references: [id])
+  userId    String
+  orderId   String        @unique
+  amount    Decimal
+  currency  String
+  status    PaymentStatus
+  createdAt DateTime      @default(now())
+  paidAt    DateTime?
+}
+
+enum PaymentStatus {
+  NONE
+  PENDING
+  PAID
+  FAILED
+}

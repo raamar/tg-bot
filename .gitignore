@@ -1,0 +1,61 @@
+# === Node.js / pnpm ===
+**/node_modules/
+**/dist/
+**/build/
+**/.turbo/
+**/.pnpm-store/
+
+# === Dependency locks ===
+# Если используешь только pnpm, оставляй .lock, остальные игнорируй
+**/package-lock.json
+**/yarn.lock
+
+# === Env / secrets ===
+.env
+.env.*        # .env.local, .env.dev и т.п.
+
+# === Logs & debug ===
+*.log
+*.pid
+*.seed
+*.tgz
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+
+# === OS / editor junk ===
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*.bak
+
+# === Prisma ===
+**/prisma/dev.db
+**/prisma/*.sqlite
+**/prisma/.env
+
+# === Certbot / Nginx generated ===
+certbot/conf/*
+certbot/www/*
+!certbot/conf/.gitkeep
+!certbot/www/.gitkeep
+
+# === VSCode / JetBrains IDEs ===
+.vscode/
+.idea/
+
+# === Coverage / testing ===
+coverage/
+.nyc_output/
+*.lcov
+*.lcov.*
+
+# === Redis dumps / persistence ===
+dump.rdb
+appendonly.aof
+
+# === Optional ===
+# Exclude compiled TypeScript output
+**/*.js
+**/*.js.map
