@@ -11,6 +11,7 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - REDIS_URL=redis://redis:6379
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
     depends_on:
       - redis
     healthcheck:
