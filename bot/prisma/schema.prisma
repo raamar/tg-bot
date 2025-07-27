@@ -28,6 +28,7 @@ model FunnelProgress {
   stageIndex Int
   startedAt  DateTime  @default(now())
   nextRunAt  DateTime?
+  nextJobId  String?
   completed  Boolean   @default(false)
 }
 

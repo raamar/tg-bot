@@ -35,5 +35,6 @@ export const getCloudPaymentsUrl = async (orderId: string, userId: string, amoun
     password: process.env.CLOUDPAYMENTS_API_SECRET!,
   }
   const response = await axios.post('https://api.cloudpayments.ru/orders/create', payload, { auth })
+
   return response.data?.Model?.Url
 }

@@ -22,6 +22,7 @@ new Worker<FunnelQueuePayload>(
   async (job: Job<FunnelQueuePayload>) => {
     const { userId, stageIndex } = job.data
     const stage = funnelMessages[stageIndex]
+    let nextJobId = null
     if (!stage) {
       throw new Error(`FUNNEL WORKER: Stage not found for index ${stageIndex}`)
     }
@@ -47,29 +48,30 @@ new Worker<FunnelQueuePayload>(
     const nextStageIndex = stageIndex + 1
     const nextStage = funnelMessages[nextStageIndex]
 
+    if (nextStage && !stage.stop) {
+      const nextJob = await funnelQueue.add(
+        `funnel-${userId}-${nextStage.id}`,
+        {
+          userId,
+          stageIndex: nextStageIndex,
+        },
+
+        { delay: process.env.NODE_ENV === 'development' ? 10000 : nextStage.delayMs }
+      )
+
+      nextJobId = nextJob.id
+    }
+
     await prisma.funnelProgress.update({
       where: { userId },
       data: {
         stageId: stage.id,
         stageIndex: stageIndex + 1,
         nextRunAt: nextStage ? new Date(Date.now() + nextStage.delayMs) : null,
+        nextJobId,
         completed: !nextStage,
       },
     })
-
-    if (!nextStage || stage.stop) {
-      return
-    }
-
-    await funnelQueue.add(
-      `funnel-${userId}-${nextStage.id}`,
-      {
-        userId,
-        stageIndex: nextStageIndex,
-      },
-
-      { delay: process.env.NODE_ENV === 'development' ? 10000 : nextStage.delayMs }
-    )
   },
   {
     connection: redis,

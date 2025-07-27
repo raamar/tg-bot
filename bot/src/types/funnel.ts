@@ -38,3 +38,10 @@ export type FunnelQueuePayload = {
   userId: string
   stageIndex: number
 }
+
+export type CloudpaymentsQueuePayload = {
+  status: 'Completed'
+  invoiceId: string
+  amount: number
+  raw: Record<string, string>
+}

@@ -1,5 +1,11 @@
 import { ActionMessage, FunnelMessage, SendActionType } from '../types/funnel'
 
+export const happyEnd = {
+  text: ['✅ Оплата прошла! ✅\n\n', 'Спасибо за доверие! Получи доступ к гайду по ссылке ниже.\n\n'].join(''),
+  button_text: '👉 Получить гайд 👈',
+  url: 'https://t.me/+lLncxyeRls5lZTMy',
+}
+
 export const actionsMessages: Record<Exclude<SendActionType, 'BUY_LINK' | 'DEFAULT'>, ActionMessage> = {
   START: {
     photoUrl: 'https://storage.yandexcloud.net/leadconverter/messenger/HZPGGVY9NiKHfqLNZJwbYreiEt1sYR4x55dia0vY.png',

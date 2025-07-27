@@ -49,6 +49,8 @@ export const actionHandlers: ActionHandlerMap = {
   },
 
   START_FUNNEL: async (ctx) => {
+    await actionHandlers.DEFAULT(ctx)
+
     const telegramId = String(ctx.from.id)
 
     const user = await prisma.user.upsert({
@@ -67,26 +69,7 @@ export const actionHandlers: ActionHandlerMap = {
       },
     })
 
-    await prisma.funnelProgress.upsert({
-      where: { userId: user.id },
-      update: {
-        stageId: 'START_FUNNEL',
-        stageIndex: 0,
-        startedAt: new Date(),
-        nextRunAt: new Date(Date.now() + funnelMessages[0].delayMs),
-      },
-      create: {
-        userId: user.id,
-        stageId: funnelMessages[0].id,
-        stageIndex: 0,
-        startedAt: new Date(),
-        nextRunAt: new Date(Date.now() + funnelMessages[0].delayMs),
-      },
-    })
-
-    await actionHandlers.DEFAULT(ctx)
-
-    await funnelQueue.add(
+    const nextJob = await funnelQueue.add(
       `funnel-${user.id}-${funnelMessages[0].id}`,
       {
         userId: user.id,
@@ -94,6 +77,25 @@ export const actionHandlers: ActionHandlerMap = {
       },
       { delay: process.env.NODE_ENV === 'development' ? 10000 : funnelMessages[0].delayMs }
     )
+
+    await prisma.funnelProgress.upsert({
+      where: { userId: user.id },
+      update: {
+        stageId: 'START_FUNNEL',
+        stageIndex: 0,
+        nextJobId: nextJob.id,
+        startedAt: new Date(),
+        nextRunAt: new Date(Date.now() + funnelMessages[0].delayMs),
+      },
+      create: {
+        userId: user.id,
+        stageId: funnelMessages[0].id,
+        stageIndex: 0,
+        nextJobId: nextJob.id,
+        startedAt: new Date(),
+        nextRunAt: new Date(Date.now() + funnelMessages[0].delayMs),
+      },
+    })
   },
   SUBSCRIBE: async (ctx) => {
     const telegramId = String(ctx.from.id)
@@ -138,19 +140,9 @@ export const actionHandlers: ActionHandlerMap = {
       return
     }
 
-    await prisma.funnelProgress.update({
-      where: { userId: user.id },
-      data: {
-        stageId: stage.id,
-        stageIndex: stageIndex + 1,
-        nextRunAt: new Date(Date.now() + nextStage.delayMs),
-        completed: false,
-      },
-    })
-
     await actionHandlers.DEFAULT(ctx)
 
-    await funnelQueue.add(
+    const nextJob = await funnelQueue.add(
       `funnel-${user.id}-${nextStage.id}`,
       {
         userId: user.id,
@@ -158,5 +150,15 @@ export const actionHandlers: ActionHandlerMap = {
       },
       { delay: process.env.NODE_ENV === 'development' ? 10000 : nextStage.delayMs }
     )
+    await prisma.funnelProgress.update({
+      where: { userId: user.id },
+      data: {
+        stageId: stage.id,
+        nextJobId: nextJob.id,
+        stageIndex: stageIndex + 1,
+        nextRunAt: new Date(Date.now() + nextStage.delayMs),
+        completed: false,
+      },
+    })
   },
 }
