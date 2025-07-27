@@ -5,6 +5,7 @@ import { funnelMessages } from '../config'
 import { prisma } from '../prisma'
 import { inline_keyboard_generate } from '../helpers/inline_keyboard_generate'
 import { bot } from '../telegraf'
+import { insertPaymentUrlToButtons } from '../insertPaymentUrlToButtons'
 
 export const funnelQueue = new Queue<FunnelQueuePayload>('funnel', {
   connection: redis,
@@ -33,6 +34,8 @@ new Worker<FunnelQueuePayload>(
     if (stage.photoUrl) {
       await bot.telegram.sendPhoto(user.telegramId, stage.photoUrl)
     }
+
+    await insertPaymentUrlToButtons(stage.buttons, user.id)
 
     await bot.telegram.sendMessage(user.telegramId, stage.text, {
       parse_mode: 'HTML',

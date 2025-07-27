@@ -9,7 +9,7 @@ interface InlineButtonBase {
 }
 
 export type InlineButton =
-  | (InlineButtonBase & { action: 'BUY_LINK'; amount: number })
+  | (InlineButtonBase & { action: 'BUY_LINK'; amount: number; url?: string })
   | (InlineButtonBase & { action: 'START' })
   | (InlineButtonBase & { action: 'CONTENTS' })
   | (InlineButtonBase & { action: 'START_FUNNEL' })

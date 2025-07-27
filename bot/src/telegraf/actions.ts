@@ -5,9 +5,11 @@ import { redis } from '../redis'
 import { inline_keyboard_generate } from '../helpers/inline_keyboard_generate'
 import { prisma } from '../prisma'
 import { funnelQueue } from '../funnel'
+import { insertPaymentUrlToButtons } from '../insertPaymentUrlToButtons'
 
 export const actionHandlers: ActionHandlerMap = {
-  DEFAULT: async (ctx) => {
+  DEFAULT: async (ctx, userId?: string) => {
+    const telegramId = String(ctx.from.id)
     let callback_data = 'DEFAULT' as keyof typeof actionsMessages
 
     if ('data' in ctx.callbackQuery && typeof ctx.callbackQuery.data === 'string') {
@@ -24,6 +26,11 @@ export const actionHandlers: ActionHandlerMap = {
       return
     }
 
+    if (!userId) {
+      const user = await prisma.user.findFirst({ where: { telegramId } })
+      userId = user?.id
+    }
+
     await redis.set(key, '1', 'EX', Number(process.env.TELEGRAM_STEPS_EXPIRE))
 
     const { text, buttons, photoUrl } = actionsMessages[callback_data]
@@ -32,6 +39,7 @@ export const actionHandlers: ActionHandlerMap = {
       await ctx.replyWithPhoto(photoUrl)
     }
 
+    await insertPaymentUrlToButtons(buttons, userId!)
     await ctx.reply(new FmtString(text), {
       parse_mode: 'HTML',
       reply_markup: {
@@ -41,8 +49,6 @@ export const actionHandlers: ActionHandlerMap = {
   },
 
   START_FUNNEL: async (ctx) => {
-    await actionHandlers.DEFAULT(ctx)
-
     const telegramId = String(ctx.from.id)
 
     const user = await prisma.user.upsert({
@@ -77,6 +83,8 @@ export const actionHandlers: ActionHandlerMap = {
         nextRunAt: new Date(Date.now() + funnelMessages[0].delayMs),
       },
     })
+
+    await actionHandlers.DEFAULT(ctx)
 
     await funnelQueue.add(
       `funnel-${user.id}-${funnelMessages[0].id}`,

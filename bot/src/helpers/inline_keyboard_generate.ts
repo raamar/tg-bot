@@ -7,7 +7,11 @@ export const inline_keyboard_generate = (buttons: InlineButton[]): InlineKeyboar
       const { action, text } = button
 
       if (action === 'BUY_LINK') {
-        const url = `https://${process.env.PUBLIC_DOMAIN}/pay?amount=${button.amount}`
+        const url = button?.url ?? ''
+
+        if (!url) {
+          throw new Error('Отсутствует платежная ссылка')
+        }
         return { text, url }
       }
 
