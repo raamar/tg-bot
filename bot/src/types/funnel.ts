@@ -1,4 +1,7 @@
-export type SendActionType = 'BUY_LINK' | 'SUBSCRIBE' | 'START' | 'CONTENTS' | 'START_FUNNEL'
+import { Context, NarrowedContext } from 'telegraf'
+import { CallbackQuery, Update } from 'telegraf/typings/core/types/typegram'
+
+export type SendActionType = 'BUY_LINK' | 'SUBSCRIBE' | 'START' | 'CONTENTS' | 'START_FUNNEL' | 'DEFAULT'
 
 interface InlineButtonBase {
   text: string
@@ -21,3 +24,9 @@ export type FunnelMessage = {
 }
 
 export type ActionMessage = Omit<FunnelMessage, 'delayMs' | 'id'>
+
+export type ActionHandlerMap = {
+  [K in Exclude<SendActionType, 'START'>]?: (
+    ctx: NarrowedContext<Context, Update.CallbackQueryUpdate<CallbackQuery>>
+  ) => Promise<void>
+}
