@@ -16,11 +16,7 @@ if (process.env.TELEGRAM_WEBHOOK_URL === undefined) {
   throw new Error('TELEGRAM_WEBHOOK_URL is not defined')
 }
 
-if (!actionHandlers.DEFAULT) {
-  throw new Error('Default action handler is not defined')
-}
-
-const bot = new Telegraf(process.env.TELEGRAM_TOKEN)
+export const bot = new Telegraf(process.env.TELEGRAM_TOKEN)
 const webhookUrl = new URL(process.env.TELEGRAM_WEBHOOK_URL)
 
 new Worker<Update>(

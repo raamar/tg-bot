@@ -21,12 +21,20 @@ export type FunnelMessage = {
   text: string
   buttons: InlineButton[]
   photoUrl?: string
+  stop?: boolean
 }
 
 export type ActionMessage = Omit<FunnelMessage, 'delayMs' | 'id'>
 
 export type ActionHandlerMap = {
+  DEFAULT: (ctx: NarrowedContext<Context, Update.CallbackQueryUpdate<CallbackQuery>>) => Promise<void>
+} & {
   [K in Exclude<SendActionType, 'START'>]?: (
     ctx: NarrowedContext<Context, Update.CallbackQueryUpdate<CallbackQuery>>
   ) => Promise<void>
+}
+
+export type FunnelQueuePayload = {
+  userId: string
+  stageIndex: number
 }
