@@ -1,6 +1,3 @@
-// import { startTelegramFlusher } from './flushers/telegram'
-import './queues/telegram'
-
-// startTelegramFlusher()
+import './telegraf'
 
 console.log('✅ Bot workers started')

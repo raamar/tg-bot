@@ -4,14 +4,15 @@ import { telegramQueue } from '../queues/telegram'
 const router = Router()
 
 router.get('/ping', (req, res) => {
-  res.json({ status: 'ok' })
+  res.status(200).send('pong')
 })
 
-router.get('/telegram', async (req, res) => {
-  await telegramQueue.add('telegram', {
-    message: 'Hello from API Test',
-  })
-  res.status(200).json({ enqueued: true })
+router.post('/telegram-webhook', async (req, res) => {
+  const update = req.body
+
+  await telegramQueue.add('process-update', update)
+
+  res.sendStatus(200)
 })
 
 export default router
