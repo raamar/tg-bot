@@ -2,6 +2,7 @@ import { FmtString } from 'telegraf/format'
 import { ActionHandlerMap } from '../types/funnel'
 import { actionsMessages } from '../config'
 import { redis } from '../redis'
+import { inline_keyboard_generate } from '../helpers/inline_keyboard_generate'
 
 export const actionHandlers: ActionHandlerMap = {
   DEFAULT: async (ctx) => {
@@ -32,7 +33,7 @@ export const actionHandlers: ActionHandlerMap = {
     await ctx.reply(new FmtString(text), {
       parse_mode: 'HTML',
       reply_markup: {
-        inline_keyboard: [buttons.map(({ text, action }) => ({ text, callback_data: action }))],
+        inline_keyboard: inline_keyboard_generate(buttons),
       },
     })
   },

@@ -6,6 +6,7 @@ import { redis } from '../redis'
 import { prisma } from '../prisma'
 import { actionsMessages } from '../config'
 import { actionHandlers } from './actions'
+import { inline_keyboard_generate } from '../helpers/inline_keyboard_generate'
 
 if (process.env.TELEGRAM_TOKEN === undefined) {
   throw new Error('TELEGRAM_TOKEN is not defined')
@@ -82,12 +83,7 @@ bot.start(async (ctx) => {
   await ctx.reply(new FmtString(text), {
     parse_mode: 'HTML',
     reply_markup: {
-      inline_keyboard: [
-        buttons.map((button) => ({
-          text: button.text,
-          callback_data: button.action,
-        })),
-      ],
+      inline_keyboard: inline_keyboard_generate(buttons),
     },
   })
 })
