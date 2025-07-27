@@ -1,6 +1,6 @@
 import { FmtString } from 'telegraf/format'
 import { ActionHandlerMap } from '../types/funnel'
-import { actionsMessages } from '../config'
+import { actionsMessages, defaultExpirationMessage } from '../config'
 import { redis } from '../redis'
 import { inline_keyboard_generate } from '../helpers/inline_keyboard_generate'
 
@@ -18,7 +18,7 @@ export const actionHandlers: ActionHandlerMap = {
     await ctx.answerCbQuery()
 
     if (alreadyDone) {
-      await ctx.reply('Вы уже открыли этот раздел ✅')
+      await ctx.reply(defaultExpirationMessage)
       return
     }
 

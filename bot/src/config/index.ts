@@ -140,3 +140,5 @@ export const funnelMessages: FunnelMessage[] = [
     buttons: [{ text: '👉 Купить за 750₽', amount: 750.0, action: 'BUY_LINK' }],
   },
 ]
+
+export const defaultExpirationMessage = 'Вы уже открыли этот раздел ✅'
