@@ -2,8 +2,7 @@ import { ActionMessage, FunnelMessage, SendActionType } from '../types/funnel'
 
 export const actionsMessages: Record<Exclude<SendActionType, 'BUY_LINK' | 'DEFAULT'>, ActionMessage> = {
   START: {
-    photoUrl:
-      'https://i.natgeofe.com/n/548467d8-c5f1-4551-9f58-6817a8d2c45e/NationalGeographic_2572187_16x9.jpg?w=1200',
+    photoUrl: 'https://storage.yandexcloud.net/leadconverter/messenger/HZPGGVY9NiKHfqLNZJwbYreiEt1sYR4x55dia0vY.png',
     text: [
       '<b>Привет!</b> Дай угадаю, ты и не думала, что твои ножки могут оплатить тебе отпуск?\n\n',
       'Тогда с гордостью представляю тебе:\n\n',
@@ -90,8 +89,7 @@ export const funnelMessages: FunnelMessage[] = [
   {
     id: 'reminder2',
     delayMs: 1000 * 60 * 60 * 22, // 22 часа
-    photoUrl:
-      'https://i.natgeofe.com/n/548467d8-c5f1-4551-9f58-6817a8d2c45e/NationalGeographic_2572187_16x9.jpg?w=1200',
+    photoUrl: 'https://storage.yandexcloud.net/leadconverter/messenger/E8TkfA2Q3pR5dcc8OgWYATdIfaaPevraM9ETvIga.png',
     text: [
       'Мои ученицы уже делают первые результаты — <b>а ты всё ещё сомневаешься?</b> 🤪\n\n',
       '<b>⚠️Важно⚠️</b>\n',
