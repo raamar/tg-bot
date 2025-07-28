@@ -10,4 +10,8 @@ router.get('/ping', (req, res) => {
 router.use('/telegram', telegram)
 router.use('/cloudpayments', cloudpayments)
 
+router.use((req, res) => {
+  res.status(404).json({ error: 'Not Found' })
+})
+
 export default router
