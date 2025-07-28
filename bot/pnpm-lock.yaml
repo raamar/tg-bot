@@ -26,6 +26,9 @@ importers:
       telegraf:
         specifier: ^4.16.3
         version: 4.16.3
+      telegraf-throttler:
+        specifier: ^0.6.0
+        version: 0.6.0(telegraf@4.16.3)
     devDependencies:
       nodemon:
         specifier: ^3.1.10
@@ -166,6 +169,9 @@ packages:
   binary-extensions@2.3.0:
     resolution: {integrity: sha512-Ceh+7ox5qe7LJuLHoY0feh3pHuUDHAcRUeyL2VYghZwfpkNIy/+8Ocg0a3UuSoYzavmylwuLWQOf3hl0jjMMIw==}
     engines: {node: '>=8'}
+
+  bottleneck@2.19.5:
+    resolution: {integrity: sha512-VHiNCbI1lKdl44tGrhNfU3lup0Tj/ZBMJB5/2ZbNXRCPuRCO7ed2mgcK4r17y+KB2EfuYuRaVlwNbAeaWGSpbw==}
 
   brace-expansion@1.1.12:
     resolution: {integrity: sha512-9T9UjW3r0UW5c1Q7GTwllptXwhvYmEzFhzMfZ9H7FQWt+uZePjZPjBP/W1ZEyZ1twGWom5/56TF4lPcqjnDHcg==}
@@ -471,6 +477,11 @@ packages:
     resolution: {integrity: sha512-QjVjwdXIt408MIiAqCX4oUKsgU2EqAGzs2Ppkm4aQYbjm+ZEWEcW4SfFNTr4uMNZma0ey4f5lgLrkB0aX0QMow==}
     engines: {node: '>=4'}
 
+  telegraf-throttler@0.6.0:
+    resolution: {integrity: sha512-RgoS1lJFdEgIL2WBf9k5nDA9lVTXNjIVRalTwIv81yg7fj0ZmYAvqAtsQRHHUqKS2f+fXuWuZWG0Yv8NFvHQRw==}
+    peerDependencies:
+      telegraf: ^4.3.0
+
   telegraf@4.16.3:
     resolution: {integrity: sha512-yjEu2NwkHlXu0OARWoNhJlIjX09dRktiMQFsM678BAH/PEPVwctzL67+tvXqLCRQQvm3SDtki2saGO9hLlz68w==}
     engines: {node: ^12.20.0 || >=14.13.1}
@@ -641,6 +652,8 @@ snapshots:
   balanced-match@1.0.2: {}
 
   binary-extensions@2.3.0: {}
+
+  bottleneck@2.19.5: {}
 
   brace-expansion@1.1.12:
     dependencies:
@@ -934,6 +947,11 @@ snapshots:
   supports-color@5.5.0:
     dependencies:
       has-flag: 3.0.0
+
+  telegraf-throttler@0.6.0(telegraf@4.16.3):
+    dependencies:
+      bottleneck: 2.19.5
+      telegraf: 4.16.3
 
   telegraf@4.16.3:
     dependencies:

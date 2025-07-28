@@ -74,6 +74,7 @@ new Worker<FunnelQueuePayload>(
     })
   },
   {
+    concurrency: 15,
     connection: redis,
   }
 )

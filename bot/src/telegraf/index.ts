@@ -7,6 +7,7 @@ import { prisma } from '../prisma'
 import { actionsMessages } from '../config'
 import { actionHandlers } from './actions'
 import { inline_keyboard_generate } from '../helpers/inline_keyboard_generate'
+import telegrafThrottler from 'telegraf-throttler'
 
 if (process.env.TELEGRAM_TOKEN === undefined) {
   throw new Error('TELEGRAM_TOKEN is not defined')
@@ -19,6 +20,17 @@ if (process.env.TELEGRAM_WEBHOOK_URL === undefined) {
 export const bot = new Telegraf(process.env.TELEGRAM_TOKEN)
 const webhookUrl = new URL(process.env.TELEGRAM_WEBHOOK_URL)
 
+const throttler = telegrafThrottler({
+  out: {
+    minTime: 34,
+    reservoir: 30,
+    reservoirRefreshAmount: 30,
+    reservoirRefreshInterval: 1000,
+  },
+})
+
+bot.use(throttler)
+
 new Worker<Update>(
   'telegram',
   async (job: Job<Update>) => {
@@ -30,6 +42,7 @@ new Worker<Update>(
     }
   },
   {
+    concurrency: 10,
     connection: redis,
   }
 )
