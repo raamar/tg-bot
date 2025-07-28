@@ -59,3 +59,7 @@ appendonly.aof
 # Exclude compiled TypeScript output
 **/*.js
 **/*.js.map
+
+letsencrypt/
+letsencrypt/*
+letsencrypt/**/*/
