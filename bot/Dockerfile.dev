@@ -10,4 +10,4 @@ COPY package.json pnpm-lock.yaml ./
 
 RUN pnpm install --frozen-lockfile
 
-CMD ["sh", "-c", "pnpm run dev"]
+CMD ["sh", "-c", "pnpm db:push || pnpm db:deploy && pnpm dev"]

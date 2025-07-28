@@ -5,8 +5,12 @@
   "main": "index.js",
   "scripts": {
     "dev": "nodemon --watch src --ext ts --exec ts-node src/worker.ts",
-    "generate": "prisma generate --schema=./prisma/schema.prisma",
-    "migrate": "prisma migrate dev --schema=./prisma/schema.prisma"
+    "db:generate": "prisma generate --schema=./prisma/schema.prisma",
+    "db:migrate": "prisma migrate dev --schema=./prisma/schema.prisma",
+    "db:push": "prisma db push --schema=./prisma/schema.prisma",
+    "db:deploy": "prisma migrate deploy --schema=./prisma/schema.prisma",
+    "build": "tsc",
+    "start": "node dist/worker.js"
   },
   "keywords": [],
   "author": "",
@@ -23,7 +27,7 @@
   },
   "devDependencies": {
     "nodemon": "^3.1.10",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "ts-node": "^10.9.2"
   }
 }

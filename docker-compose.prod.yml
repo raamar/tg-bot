@@ -1,0 +1,70 @@
+services:
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    ports:
+      - '3000:3000'
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - REDIS_URL=redis://redis:6379
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+      - CLOUDPAYMENTS_API_SECRET=${CLOUDPAYMENTS_API_SECRET}
+    depends_on:
+      - redis
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://api:3000/ping']
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  bot:
+    build:
+      context: ./bot
+      dockerfile: Dockerfile
+    depends_on:
+      - db
+      - redis
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+      - TELEGRAM_WEBHOOK_URL=${TELEGRAM_WEBHOOK_URL}
+      - TELEGRAM_STEPS_EXPIRE=${TELEGRAM_STEPS_EXPIRE:-3600}
+      - PUBLIC_DOMAIN=${PUBLIC_DOMAIN:-example.com}
+      - CLOUDPAYMENTS_PUBLIC_ID=${CLOUDPAYMENTS_PUBLIC_ID}
+      - CLOUDPAYMENTS_API_SECRET=${CLOUDPAYMENTS_API_SECRET}
+      - SHOP_INN=${SHOP_INN}
+
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    volumes:
+      - redis-data:/data
+      - ./redis.conf:/usr/local/etc/redis/redis.conf
+    command: ['redis-server', '/usr/local/etc/redis/redis.conf']
+
+  minio:
+    image: minio/minio:RELEASE.2023-05-04T21-44-30Z
+    container_name: minio
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+
+volumes:
+  postgres-data:
+  redis-data:
+  minio_data:
