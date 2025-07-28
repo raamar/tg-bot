@@ -10,7 +10,7 @@ restart:
 down-hard:
 	@read -p "⚠️  Это удалит все данные! Продолжить? (y/N): " confirm && \
 	if [ "$$confirm" = "y" ]; then \
-		docker compose down -f docker-compose.prod.yml -v; \
+		docker compose -f docker-compose.prod.yml down -v; \
 	else \
 		echo "Операция отменена."; \
 	fi
