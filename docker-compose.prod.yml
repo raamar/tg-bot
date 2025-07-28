@@ -63,6 +63,32 @@ services:
     volumes:
       - minio_data:/data
     command: server /data --console-address ":9001"
+  nginx:
+    image: nginx:stable
+    container_name: nginx
+    restart: always
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      - PUBLIC_DOMAIN=${PUBLIC_DOMAIN}
+    volumes:
+      - ./nginx/nginx.template.conf:/etc/nginx/nginx.template.conf:ro
+      - ./nginx/entrypoint.sh:/docker-entrypoint.d/10-generate.sh:ro
+      - certbot-etc:/etc/letsencrypt
+      - certbot-www:/var/www/certbot
+    depends_on:
+      - api
+      - bot
+
+  certbot:
+    image: certbot/certbot
+    container_name: certbot
+    volumes:
+      - certbot-etc:/etc/letsencrypt
+      - certbot-www:/var/www/certbot
+    entrypoint: >
+      sh -c 'trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet --agree-tos --no-eff-email && nginx -s reload; sleep 12h & wait $${!}; done'
 
 volumes:
   postgres-data:

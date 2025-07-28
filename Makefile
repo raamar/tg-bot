@@ -24,3 +24,13 @@ studio:
 logs:
 	docker compose logs -f --tail=100
 
+DOMAIN ?= $(PUBLIC_DOMAIN)
+EMAIL ?= your@email.com
+
+cert-init:
+	@echo "🔐 Generating initial certificate for domain: $(DOMAIN)"
+	docker compose run --rm certbot certonly \
+		--webroot -w /var/www/certbot \
+		--email $(EMAIL) \
+		--agree-tos --no-eff-email \
+		-d $(DOMAIN)
