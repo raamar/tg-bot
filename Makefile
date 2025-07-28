@@ -24,8 +24,11 @@ studio:
 logs:
 	docker compose logs -f --tail=100
 
+include .env
+export
+
 DOMAIN ?= $(PUBLIC_DOMAIN)
-EMAIL ?= your@email.com
+EMAIL ?= $(CERTBOT_EMAIL)
 
 cert-init:
 	@echo "🔐 Generating initial certificate for domain: $(DOMAIN)"

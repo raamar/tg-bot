@@ -80,17 +80,29 @@ services:
     depends_on:
       - api
       - bot
-
   certbot:
     image: certbot/certbot
     container_name: certbot
     volumes:
       - certbot-etc:/etc/letsencrypt
       - certbot-www:/var/www/certbot
+  certbot-renew:
+    image: certbot/certbot
+    volumes:
+      - certbot-etc:/etc/letsencrypt
+      - certbot-www:/var/www/certbot
     entrypoint: >
-      sh -c 'trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet --agree-tos --no-eff-email && nginx -s reload; sleep 12h & wait $${!}; done'
+      sh -c 'while :; do
+        certbot renew --webroot -w /var/www/certbot --quiet --agree-tos --no-eff-email &&
+        docker exec nginx nginx -s reload;
+        sleep 12h;
+      done'
+    depends_on:
+      - nginx
 
 volumes:
   postgres-data:
   redis-data:
   minio_data:
+  certbot-etc:
+  certbot-www:
