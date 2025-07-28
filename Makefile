@@ -29,7 +29,7 @@ EMAIL ?= your@email.com
 
 cert-init:
 	@echo "🔐 Generating initial certificate for domain: $(DOMAIN)"
-	docker compose run --rm certbot certonly \
+	docker compose -f docker-compose.prod.yml run --rm certbot certonly \
 		--webroot -w /var/www/certbot \
 		--email $(EMAIL) \
 		--agree-tos --no-eff-email \
