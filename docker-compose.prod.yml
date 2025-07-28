@@ -1,15 +1,41 @@
 services:
+  traefik:
+    image: traefik:v2.11
+    container_name: traefik
+    restart: always
+    command:
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entryPoint.to=websecure
+      - --entrypoints.web.http.redirections.entryPoint.scheme=https
+      - --entrypoints.websecure.address=:443
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --certificatesresolvers.le.acme.httpchallenge=true
+      - --certificatesresolvers.le.acme.httpchallenge.entrypoint=web
+      - --certificatesresolvers.le.acme.email=${LETSENCRYPT_EMAIL}
+      - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./letsencrypt:/letsencrypt
+
   api:
     build:
       context: ./api
       dockerfile: Dockerfile
-    ports:
-      - '3000:3000'
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - REDIS_URL=redis://redis:6379
       - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
       - CLOUDPAYMENTS_API_SECRET=${CLOUDPAYMENTS_API_SECRET}
+    labels:
+      - 'traefik.enable=true'
+      - 'traefik.http.routers.api.rule=Host(`${PUBLIC_DOMAIN}`) && PathPrefix(`/`)'
+      - 'traefik.http.routers.api.entrypoints=websecure'
+      - 'traefik.http.routers.api.tls.certresolver=le'
+      - 'traefik.http.services.api.loadbalancer.server.port=3000'
     depends_on:
       - redis
     healthcheck:
@@ -23,9 +49,6 @@ services:
     build:
       context: ./bot
       dockerfile: Dockerfile
-    depends_on:
-      - db
-      - redis
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - REDIS_URL=redis://redis:6379
@@ -37,6 +60,9 @@ services:
       - CLOUDPAYMENTS_PUBLIC_ID=${CLOUDPAYMENTS_PUBLIC_ID}
       - CLOUDPAYMENTS_API_SECRET=${CLOUDPAYMENTS_API_SECRET}
       - SHOP_INN=${SHOP_INN}
+    depends_on:
+      - db
+      - redis
 
   db:
     image: postgres:15
@@ -60,49 +86,19 @@ services:
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    command: server /data --console-address ":9001"
     volumes:
       - minio_data:/data
-    command: server /data --console-address ":9001"
-  nginx:
-    image: nginx:stable
-    container_name: nginx
-    restart: always
-    ports:
-      - '80:80'
-      - '443:443'
-    environment:
-      - PUBLIC_DOMAIN=${PUBLIC_DOMAIN}
-    volumes:
-      - ./nginx/nginx.template.conf:/etc/nginx/nginx.template.conf:ro
-      - ./nginx/entrypoint.sh:/docker-entrypoint.d/10-generate.sh:ro
-      - certbot-etc:/etc/letsencrypt
-      - certbot-www:/var/www/certbot
-    depends_on:
-      - api
-      - bot
-  certbot:
-    image: certbot/certbot
-    container_name: certbot
-    volumes:
-      - certbot-etc:/etc/letsencrypt
-      - certbot-www:/var/www/certbot
-  certbot-renew:
-    image: certbot/certbot
-    volumes:
-      - certbot-etc:/etc/letsencrypt
-      - certbot-www:/var/www/certbot
-    entrypoint: >
-      sh -c 'while :; do
-        certbot renew --webroot -w /var/www/certbot --quiet --agree-tos --no-eff-email &&
-        docker exec nginx nginx -s reload;
-        sleep 12h;
-      done'
-    depends_on:
-      - nginx
+    labels:
+      - 'traefik.enable=true'
+      - 'traefik.http.routers.minio.rule=Host(`${PUBLIC_DOMAIN}`) && PathPrefix(`/minio`)'
+      - 'traefik.http.routers.minio.entrypoints=websecure'
+      - 'traefik.http.routers.minio.tls.certresolver=le'
+      - 'traefik.http.services.minio.loadbalancer.server.port=9000'
+      - 'traefik.http.middlewares.minio-strip.stripprefix.prefixes=/minio'
+      - 'traefik.http.routers.minio.middlewares=minio-strip'
 
 volumes:
   postgres-data:
   redis-data:
   minio_data:
-  certbot-etc:
-  certbot-www:
