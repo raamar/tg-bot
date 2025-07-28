@@ -91,11 +91,11 @@ services:
       - minio_data:/data
     labels:
       - 'traefik.enable=true'
-      - 'traefik.http.routers.minio.rule=Host(`${PUBLIC_DOMAIN}`) && PathPrefix(`/minio`)'
+      - 'traefik.http.routers.minio.rule=Host(`${PUBLIC_DOMAIN}`) && PathPrefix(`/media`)'
       - 'traefik.http.routers.minio.entrypoints=websecure'
       - 'traefik.http.routers.minio.tls.certresolver=le'
       - 'traefik.http.services.minio.loadbalancer.server.port=9000'
-      - 'traefik.http.middlewares.minio-strip.stripprefix.prefixes=/minio'
+      - 'traefik.http.middlewares.minio-strip.stripprefix.prefixes=/media'
       - 'traefik.http.routers.minio.middlewares=minio-strip'
 
 volumes:
