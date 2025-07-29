@@ -32,6 +32,8 @@ new Worker<CloudpaymentsQueuePayload>(
         },
         select: {
           createdAt: true,
+          amount: true,
+          url: true,
           user: {
             select: {
               id: true,
@@ -57,6 +59,9 @@ new Worker<CloudpaymentsQueuePayload>(
         user_id: payments.user.id,
         user_telegram_id: payments.user.telegramId,
         stage: 'COMPLETED',
+        payment_status: 'PAID',
+        amount: payments.amount.toFixed(2),
+        order_url: String(payments.url),
         paid_at: formatDate(payments.createdAt),
       })
 
