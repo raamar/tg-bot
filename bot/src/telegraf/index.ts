@@ -37,6 +37,12 @@ new Worker<Update>(
     try {
       await bot.handleUpdate(job.data)
     } catch (error) {
+      let message = error
+
+      if (error instanceof Error) {
+        message = error.message
+      }
+
       console.error(`TELEGRAM UPDATE: Ошибка в задаче ${job.id}:`, error)
       throw error
     }
@@ -69,7 +75,7 @@ bot.start(async (ctx) => {
   const ref = ctx.message.text?.split(' ')[1] || null
   const { text, buttons, photoUrl } = actionsMessages.START
 
-  await prisma.user.upsert({
+  const user = await prisma.user.upsert({
     where: { telegramId: String(id) },
     create: {
       telegramId: String(id),

@@ -45,3 +45,17 @@ export type CloudpaymentsQueuePayload = {
   amount: number
   raw: Record<string, string>
 }
+
+export type SheetLog = {
+  user_id: string
+  username?: string
+  first_name?: string
+  last_name?: string
+  joined_at?: string
+  ref_code?: string
+  payment_status?: string
+  amount?: string
+  stage?: string
+  order_url?: string
+  paid_at?: string
+}
