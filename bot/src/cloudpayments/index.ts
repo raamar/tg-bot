@@ -58,7 +58,6 @@ new Worker<CloudpaymentsQueuePayload>(
       googleSheetQueue.add('update', {
         user_id: payments.user.id,
         user_telegram_id: payments.user.telegramId,
-        stage: 'COMPLETED',
         payment_status: 'PAID',
         amount: payments.amount.toFixed(2),
         order_url: String(payments.url),
