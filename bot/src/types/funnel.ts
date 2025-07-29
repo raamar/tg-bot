@@ -48,6 +48,7 @@ export type CloudpaymentsQueuePayload = {
 
 export type SheetLog = {
   user_id: string
+  user_telegram_id: string
   username?: string
   first_name?: string
   last_name?: string

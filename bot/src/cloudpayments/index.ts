@@ -5,6 +5,8 @@ import { prisma } from '../prisma'
 import { funnelQueue } from '../funnel'
 import { bot } from '../telegraf'
 import { happyEnd } from '../config'
+import { googleSheetQueue } from '../googleSheet'
+import { formatDate } from '../helpers/formatDate'
 
 export const cloudpaymentsQueue = new Queue('cloudpayments', {
   connection: redis,
@@ -29,8 +31,10 @@ new Worker<CloudpaymentsQueuePayload>(
           paidAt: new Date(),
         },
         select: {
+          createdAt: true,
           user: {
             select: {
+              id: true,
               telegramId: true,
               funnelProgress: {
                 select: {
@@ -49,6 +53,13 @@ new Worker<CloudpaymentsQueuePayload>(
         },
       })
 
+      googleSheetQueue.add('update', {
+        user_id: payments.user.id,
+        user_telegram_id: payments.user.telegramId,
+        stage: 'COMPLETED',
+        paid_at: formatDate(payments.createdAt),
+      })
+
       const funnelJobIdToCancel = payments.user.funnelProgress?.nextJobId
 
       if (!funnelJobIdToCancel) {
@@ -64,11 +75,21 @@ new Worker<CloudpaymentsQueuePayload>(
       await funnelJob.remove()
     } catch (error) {
       console.error(`Payment: Ошибка в задаче ${job.id}:`, error)
-      await prisma.payment.update({
+
+      const payments = await prisma.payment.update({
         where: { id: job.data.invoiceId },
         data: {
           status: 'FAILED',
         },
+        select: {
+          user: { select: { id: true, telegramId: true } },
+        },
+      })
+
+      googleSheetQueue.add('update', {
+        user_id: payments.user.id,
+        user_telegram_id: payments.user.telegramId,
+        stage: 'FAILED',
       })
       throw error
     }

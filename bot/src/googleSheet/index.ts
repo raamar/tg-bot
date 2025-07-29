@@ -29,7 +29,7 @@ const startSheetsManager = () => {
   setInterval(async () => {
     const count = await redis.llen(REDIS_KEY)
     if (count === 0) {
-      console.log('⏳  Google Sheet: buffer is empty, skipping...')
+      // console.log('⏳  Google Sheet: buffer is empty, skipping...')
       return
     }
 
@@ -39,6 +39,7 @@ const startSheetsManager = () => {
     try {
       await axios.post(SHEETS_ENDPOINT, parsed)
       await redis.del(REDIS_KEY)
+      console.log('✅ Google Sheet: log sended.')
     } catch (err) {
       console.error('❌ Google Sheet: Failed to send data to Sheets:', err)
     }
@@ -54,14 +55,39 @@ const startSheetsManager = () => {
         return
       }
 
-      await redis.rpush(REDIS_KEY, JSON.stringify(payload))
-      const count = await redis.llen(REDIS_KEY)
-      console.log(`🗂️ Google Sheet: Sheets log added. Current buffer size: ${count}`)
+      const sortedPayload: Record<string, unknown> = Object.keys(payload)
+        .sort()
+        .reduce((acc, key) => {
+          acc[key] = payload[key as keyof SheetLog]
+          return acc
+        }, {} as Record<string, unknown>)
+
+      await redis.rpush(REDIS_KEY, JSON.stringify(sortedPayload))
+      // const count = await redis.llen(REDIS_KEY)
+      // console.log(`🗂️  Google Sheet: Sheets log added. Current buffer size: ${count}`)
     },
     {
       connection: redis,
     }
   )
 }
+
+/**
+ * FIRST INIT FOR SHEETS
+ */
+googleSheetQueue.add('update', {
+  user_telegram_id: 'SYSTEM',
+  user_id: 'RESTART',
+  username: '',
+  first_name: '',
+  last_name: '',
+  joined_at: '',
+  ref_code: '',
+  stage: '',
+  amount: '',
+  order_url: '',
+  paid_at: '',
+  payment_status: '',
+})
 
 startSheetsManager()

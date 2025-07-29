@@ -8,6 +8,8 @@ import { actionsMessages } from '../config'
 import { actionHandlers } from './actions'
 import { inline_keyboard_generate } from '../helpers/inline_keyboard_generate'
 import telegrafThrottler from 'telegraf-throttler'
+import { googleSheetQueue } from '../googleSheet'
+import { formatDate } from '../helpers/formatDate'
 
 if (process.env.TELEGRAM_TOKEN === undefined) {
   throw new Error('TELEGRAM_TOKEN is not defined')
@@ -100,6 +102,18 @@ bot.start(async (ctx) => {
     reply_markup: {
       inline_keyboard: inline_keyboard_generate(buttons),
     },
+  })
+
+  googleSheetQueue.add('update', {
+    user_telegram_id: user.telegramId,
+    user_id: user.id,
+    username: user.username ?? undefined,
+    first_name: user.firstName ?? undefined,
+    last_name: user.lastName ?? undefined,
+    ref_code: ref ?? undefined,
+    joined_at: formatDate(user.createdAt),
+    stage: 'START',
+    payment_status: 'NONE',
   })
 })
 

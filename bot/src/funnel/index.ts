@@ -7,6 +7,7 @@ import { inline_keyboard_generate } from '../helpers/inline_keyboard_generate'
 import { bot } from '../telegraf'
 import { insertPaymentUrlToButtons } from '../insertPaymentUrlToButtons'
 import { FmtString } from 'telegraf/format'
+import { googleSheetQueue } from '../googleSheet'
 
 export const funnelQueue = new Queue<FunnelQueuePayload>('funnel', {
   connection: redis,
@@ -63,7 +64,7 @@ new Worker<FunnelQueuePayload>(
       nextJobId = nextJob.id
     }
 
-    const funnel = await prisma.funnelProgress.update({
+    await prisma.funnelProgress.update({
       where: { userId },
       data: {
         stageId: stage.id,
@@ -72,6 +73,24 @@ new Worker<FunnelQueuePayload>(
         nextJobId,
         completed: !nextStage,
       },
+    })
+
+    stage.buttons
+      .filter((button) => button.action === 'BUY_LINK')
+      .forEach(({ url, amount }) => {
+        googleSheetQueue.add('update', {
+          user_id: user.id,
+          user_telegram_id: user.telegramId,
+          payment_status: 'PENDING',
+          amount: String(amount),
+          order_url: url,
+        })
+      })
+
+    googleSheetQueue.add('update', {
+      stage: stage.id,
+      user_id: user.id,
+      user_telegram_id: user.telegramId,
     })
   },
   {

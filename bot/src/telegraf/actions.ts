@@ -1,14 +1,15 @@
 import { FmtString } from 'telegraf/format'
 import { ActionHandlerMap } from '../types/funnel'
-import { actionsMessages, defaultExpirationMessage, funnelMessages } from '../config'
+import { actionsMessages, default403Message, defaultExpirationMessage, funnelMessages } from '../config'
 import { redis } from '../redis'
 import { inline_keyboard_generate } from '../helpers/inline_keyboard_generate'
 import { prisma } from '../prisma'
 import { funnelQueue } from '../funnel'
 import { insertPaymentUrlToButtons } from '../insertPaymentUrlToButtons'
+import { googleSheetQueue } from '../googleSheet'
 
 export const actionHandlers: ActionHandlerMap = {
-  DEFAULT: async (ctx, userId?: string) => {
+  DEFAULT: async (ctx) => {
     const telegramId = String(ctx.from.id)
     let callback_data = 'DEFAULT' as keyof typeof actionsMessages
 
@@ -26,9 +27,11 @@ export const actionHandlers: ActionHandlerMap = {
       return
     }
 
-    if (!userId) {
-      const user = await prisma.user.findFirst({ where: { telegramId } })
-      userId = user?.id
+    const user = await prisma.user.findFirst({ where: { telegramId }, select: { id: true } })
+
+    if (!user) {
+      await ctx.reply(default403Message)
+      return
     }
 
     await redis.set(key, '1', 'EX', Number(process.env.TELEGRAM_STEPS_EXPIRE))
@@ -39,12 +42,30 @@ export const actionHandlers: ActionHandlerMap = {
       await ctx.replyWithPhoto(photoUrl)
     }
 
-    await insertPaymentUrlToButtons(buttons, userId!)
+    await insertPaymentUrlToButtons(buttons, user.id)
     await ctx.reply(new FmtString(text), {
       parse_mode: 'HTML',
       reply_markup: {
         inline_keyboard: inline_keyboard_generate(buttons),
       },
+    })
+
+    buttons
+      .filter((button) => button.action === 'BUY_LINK')
+      .forEach(({ url, amount }) => {
+        googleSheetQueue.add('update', {
+          user_id: user.id,
+          user_telegram_id: telegramId,
+          payment_status: 'PENDING',
+          amount: String(amount),
+          order_url: url,
+        })
+      })
+
+    googleSheetQueue.add('update', {
+      user_id: user.id,
+      user_telegram_id: telegramId,
+      stage: callback_data,
     })
   },
 
