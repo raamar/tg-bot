@@ -62,6 +62,7 @@ services:
       - SHOP_INN=${SHOP_INN}
       - GOOGLE_SHEET_INTERVAL=${GOOGLE_SHEET_INTERVAL}
       - GOOGLE_SHEET_ENDPOINT=${GOOGLE_SHEET_ENDPOINT}
+      - ADMIN_IDS=${ADMIN_IDS}
     depends_on:
       - db
       - redis

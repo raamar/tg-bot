@@ -11,7 +11,7 @@ import telegrafThrottler from 'telegraf-throttler'
 import { googleSheetQueue } from '../googleSheet'
 import { formatDate } from '../helpers/formatDate'
 import { adminActions } from './adminActions'
-import { message } from 'telegraf/filters'
+import { DocumentContext, PhotoContext, TextContext } from '../types/admin'
 
 if (process.env.TELEGRAM_TOKEN === undefined) {
   throw new Error('TELEGRAM_TOKEN is not defined')
@@ -63,12 +63,6 @@ bot.launch({
     path: webhookUrl.pathname,
   },
 })
-
-bot.command('broadcast', adminActions.commands.broadcast)
-
-bot.on(message('text'), adminActions.messages.text as Parameters<typeof bot.on>[1])
-bot.on(message('document'), adminActions.messages.document as Parameters<typeof bot.on>[1])
-bot.on(message('photo'), adminActions.messages.photo as Parameters<typeof bot.on>[1])
 
 for (const [pattern, handler] of Object.entries(adminActions.callbacks)) {
   bot.action(pattern, handler)
@@ -127,6 +121,21 @@ bot.start(async (ctx) => {
     stage: 'START',
     payment_status: 'NONE',
   })
+})
+
+bot.command('broadcast', adminActions.commands.broadcast)
+
+bot.on('message', (ctx, next) => {
+  if ('text' in ctx.message) {
+    return adminActions.messages.text(ctx as TextContext)
+  }
+  if ('document' in ctx.message) {
+    return adminActions.messages.document(ctx as DocumentContext)
+  }
+  if ('photo' in ctx.message) {
+    return adminActions.messages.photo(ctx as PhotoContext)
+  }
+  return next()
 })
 
 process.once('SIGINT', () => bot.stop('SIGINT'))
