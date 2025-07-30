@@ -74,13 +74,21 @@ const broadcastItemsWorker = new Worker(
 
 async function checkIfDone(parentJobId: string) {
   const statusKey = `broadcast_status:${parentJobId}`
-  const status = await redis.hgetall(statusKey)
+  const doneKey = `broadcast_status:done:${parentJobId}`
+
+  const [status, isDone] = await Promise.all([redis.hgetall(statusKey), redis.get(doneKey)])
+
+  if (isDone) return
+
   const success = Number(status.success)
   const failed = Number(status.failed)
   const total = Number(status.total)
   const adminId = Number(status.adminId)
 
   if (success + failed === total) {
+    await redis.set(doneKey, '1')
+    await redis.expire(doneKey, 3600)
+
     await bot.telegram.sendMessage(adminId, `📢 Рассылка завершена!\n✅ Успешно: ${success}\n❌ Ошибок: ${failed}`)
     await redis.del(statusKey)
   }
