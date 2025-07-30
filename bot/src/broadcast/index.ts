@@ -33,6 +33,6 @@ new Worker<BroadcastJobData>(
   },
   {
     connection: redis,
-    concurrency: 1,
+    concurrency: 15,
   }
 )
