@@ -1,4 +1,4 @@
-import { Queue, Worker, QueueEvents, Job } from 'bullmq'
+import { Queue, Worker, Job } from 'bullmq'
 import { redis } from '../redis'
 import { bot } from '../telegraf'
 
@@ -10,107 +10,96 @@ interface BroadcastJobData {
 }
 
 interface BroadcastItemJobData {
-  jobId: string
   adminId: number
   contactId: string
   text: string
   photoFileId?: string
+  total: number
+  parentJobId: string
 }
 
-export const broadcastQueue = new Queue<BroadcastJobData>('broadcast', {
-  connection: redis,
-})
+export const broadcastQueue = new Queue<BroadcastJobData>('broadcast', { connection: redis })
+const broadcastItemsQueue = new Queue<BroadcastItemJobData>('broadcast_items', { connection: redis })
 
-export const broadcastItemsQueue = new Queue<BroadcastItemJobData>('broadcast_items', {
-  connection: redis,
-})
-
-new Worker<BroadcastJobData>(
+new Worker(
   'broadcast',
   async (job) => {
     const { adminId, contacts, text, photoFileId } = job.data
-    const jobId = job.id!
-    const keyBase = `broadcast:${jobId}`
+    const parentJobId = job.id!
+    const total = contacts.length
+    const statusKey = `broadcast_status:${parentJobId}`
 
-    await redis.mset({
-      [`${keyBase}:total`]: contacts.length,
-      [`${keyBase}:success`]: 0,
-      [`${keyBase}:failed`]: 0,
-      [`${keyBase}:adminId`]: adminId,
+    await redis.hmset(statusKey, {
+      success: 0,
+      failed: 0,
+      total,
+      adminId,
     })
 
     for (const contactId of contacts) {
-      await broadcastItemsQueue.add('broadcast_item', {
-        jobId,
-        adminId,
-        contactId,
-        text,
-        photoFileId,
-      })
+      await broadcastItemsQueue.add(
+        'send_message',
+        {
+          adminId,
+          contactId,
+          text,
+          photoFileId,
+          total,
+          parentJobId,
+        },
+        {
+          attempts: 3,
+          backoff: { type: 'fixed', delay: 1000 },
+          removeOnComplete: true,
+          removeOnFail: true,
+        }
+      )
     }
-
-    await bot.telegram.sendMessage(adminId, `📤 Рассылка началась. Всего контактов: ${contacts.length}`)
   },
-  {
-    connection: redis,
-  }
+  { connection: redis }
 )
 
-new Worker<BroadcastItemJobData>(
+const broadcastItemsWorker = new Worker(
   'broadcast_items',
-  async (job) => {
+  async (job: Job<BroadcastItemJobData>) => {
     const { contactId, text, photoFileId } = job.data
 
-    try {
-      if (photoFileId) {
-        await bot.telegram.sendPhoto(contactId, photoFileId)
-      }
-      await bot.telegram.sendMessage(contactId, text, { parse_mode: 'HTML' })
-    } catch (error: any) {
-      const code = error?.code
-      const message = error?.message
-      console.error(`❌ Ошибка при отправке ${contactId}:`, code || message || error)
-      throw new Error(code || message || 'unknown error')
+    if (photoFileId) {
+      await bot.telegram.sendPhoto(contactId, photoFileId)
     }
+    await bot.telegram.sendMessage(contactId, text, { parse_mode: 'HTML' })
   },
-  {
-    connection: redis,
-    concurrency: 20,
-  }
+  { connection: redis, concurrency: 20 }
 )
 
-const broadcastItemsEvents = new QueueEvents('broadcast_items', {
-  connection: redis,
-})
+async function checkIfDone(parentJobId: string) {
+  const statusKey = `broadcast_status:${parentJobId}`
+  const status = await redis.hgetall(statusKey)
+  const success = Number(status.success)
+  const failed = Number(status.failed)
+  const total = Number(status.total)
+  const adminId = Number(status.adminId)
 
-broadcastItemsEvents.on('completed', async ({ jobId }) => {
-  await handleResult('success', jobId!)
-})
-
-broadcastItemsEvents.on('failed', async ({ jobId }) => {
-  await handleResult('failed', jobId!)
-})
-
-async function handleResult(type: 'success' | 'failed', jobId: string) {
-  const keyBase = `broadcast:${jobId}`
-  const counterKey = type === 'success' ? `${keyBase}:success` : `${keyBase}:failed`
-  await redis.incr(counterKey)
-
-  const [successStr, failedStr, totalStr, adminIdStr] = await redis.mget(
-    `${keyBase}:success`,
-    `${keyBase}:failed`,
-    `${keyBase}:total`,
-    `${keyBase}:adminId`
-  )
-
-  const success = parseInt(successStr || '0', 10)
-  const failed = parseInt(failedStr || '0', 10)
-  const total = parseInt(totalStr || '0', 10)
-  const adminId = parseInt(adminIdStr || '0', 10)
-
-  if (success + failed >= total && total > 0) {
-    await bot.telegram.sendMessage(adminId, `✅ Рассылка завершена.\nУспешно: ${success}\nОшибок: ${failed}`)
-
-    await redis.del(`${keyBase}:success`, `${keyBase}:failed`, `${keyBase}:total`, `${keyBase}:adminId`)
+  if (success + failed === total) {
+    await bot.telegram.sendMessage(adminId, `📢 Рассылка завершена!\n✅ Успешно: ${success}\n❌ Ошибок: ${failed}`)
+    await redis.del(statusKey)
   }
 }
+
+broadcastItemsWorker.on('completed', async (job) => {
+  if (!job) return
+
+  const { parentJobId } = job.data
+  await redis.hincrby(`broadcast_status:${parentJobId}`, 'success', 1)
+  await checkIfDone(parentJobId)
+})
+
+broadcastItemsWorker.on('failed', async (job, err) => {
+  if (!job) return
+
+  const { parentJobId } = job.data
+  if (job.attemptsMade >= (job.opts.attempts ?? 1)) {
+    await redis.hincrby(`broadcast_status:${parentJobId}`, 'failed', 1)
+    await checkIfDone(parentJobId)
+  }
+})

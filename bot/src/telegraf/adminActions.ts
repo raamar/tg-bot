@@ -64,7 +64,7 @@ const startBroadcasting = async (ctx: TextContext | CallbackContext, session: Br
   })
 
   await redis.del(`admin:${ctx.from.id}:broadcast`)
-  await ctx.reply(`Рассылка запущена! Будет отправлено ${session.contacts.length} сообщений`)
+  await ctx.reply(`Рассылка запущена.`)
 }
 
 const isAdmin = (userId?: number): boolean => {
