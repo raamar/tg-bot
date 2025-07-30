@@ -5,6 +5,7 @@ import { AdminActionHandlerMap, BroadcastSession, CallbackContext, PhotoContext,
 import { broadcastQueue } from '../broadcast'
 import { processContactsFile } from '../helpers/fileProcessor'
 import { bot } from '.'
+import { restoreHtmlFromEntities } from '../helpers/restoreHtmlFromEntities'
 
 const getSession = async (ctx: { from?: { id: number } }): Promise<BroadcastSession | null> => {
   if (!ctx.from) return null
@@ -98,7 +99,7 @@ const adminActions: AdminActionHandlerMap = {
       const session = await getSession(ctx)
       if (!session || session.step !== 'AWAIT_TEXT') return
 
-      session.text = ctx.message.text
+      session.text = restoreHtmlFromEntities(ctx.message.text, ctx.message.entities ?? [])
       session.step = 'MAIN_MENU'
       await updateSession(ctx, session)
 
