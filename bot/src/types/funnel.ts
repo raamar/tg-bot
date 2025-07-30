@@ -2,6 +2,7 @@ import { Context, NarrowedContext } from 'telegraf'
 import { CallbackQuery, Update } from 'telegraf/typings/core/types/typegram'
 
 export type SendActionType = 'BUY_LINK' | 'SUBSCRIBE' | 'START' | 'CONTENTS' | 'START_FUNNEL' | 'DEFAULT'
+export type AdminActionType = 'BROADCAST' | 'BROADCAST_FILE' | 'BROADCAST_MESSAGE' | 'BROADCAST_PHOTO'
 
 interface InlineButtonBase {
   text: string

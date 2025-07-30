@@ -10,6 +10,8 @@ import { inline_keyboard_generate } from '../helpers/inline_keyboard_generate'
 import telegrafThrottler from 'telegraf-throttler'
 import { googleSheetQueue } from '../googleSheet'
 import { formatDate } from '../helpers/formatDate'
+import { adminActions } from './adminActions'
+import { message } from 'telegraf/filters'
 
 if (process.env.TELEGRAM_TOKEN === undefined) {
   throw new Error('TELEGRAM_TOKEN is not defined')
@@ -61,6 +63,16 @@ bot.launch({
     path: webhookUrl.pathname,
   },
 })
+
+bot.command('broadcast', adminActions.commands.broadcast)
+
+bot.on(message('text'), adminActions.messages.text as Parameters<typeof bot.on>[1])
+bot.on(message('document'), adminActions.messages.document as Parameters<typeof bot.on>[1])
+bot.on(message('photo'), adminActions.messages.photo as Parameters<typeof bot.on>[1])
+
+for (const [pattern, handler] of Object.entries(adminActions.callbacks)) {
+  bot.action(pattern, handler)
+}
 
 for (const [action] of Object.entries(actionsMessages)) {
   const customHandler = actionHandlers[action as keyof typeof actionHandlers]

@@ -1,0 +1,216 @@
+// src/actions/admin.ts
+import { Markup } from 'telegraf'
+import { redis } from '../redis'
+import { AdminActionHandlerMap, BroadcastSession, CallbackContext, PhotoContext, TextContext } from '../types/admin'
+import { broadcastQueue } from '../broadcast'
+import { processContactsFile } from '../helpers/fileProcessor'
+import { bot } from '.'
+
+const getSession = async (ctx: { from?: { id: number } }): Promise<BroadcastSession | null> => {
+  if (!ctx.from) return null
+  const sessionRaw = await redis.get(`admin:${ctx.from.id}:broadcast`)
+  return sessionRaw ? JSON.parse(sessionRaw) : null
+}
+
+const updateSession = async (ctx: { from?: { id: number } }, session: BroadcastSession): Promise<void> => {
+  if (!ctx.from) return
+  await redis.set(`admin:${ctx.from.id}:broadcast`, JSON.stringify(session))
+}
+
+const showMainMenu = async (
+  ctx: TextContext | CallbackContext | PhotoContext,
+  session: BroadcastSession
+): Promise<void> => {
+  const message = [
+    `📊 <b>Рассылка</b>`,
+    `👥 Контактов: ${session.contacts.length}`,
+    `📝 Текст: ${session.text ? '✅' : '❌'}`,
+    `🖼 Фото: ${session.photoFileId ? '✅' : '❌'}`,
+    ``,
+    `Выберите действие:`,
+  ].join('\n')
+
+  const photoButtonText = session.photoFileId ? '🖼 Изменить фото' : '➕ Добавить фото'
+
+  const keyboard = Markup.inlineKeyboard([
+    [
+      Markup.button.callback('✏️ Изменить текст', 'broadcast:edit_text'),
+      Markup.button.callback(photoButtonText, 'broadcast:edit_photo'),
+    ],
+    [
+      Markup.button.callback('🚀 Начать рассылку', 'broadcast:start'),
+      Markup.button.callback('❌ Отменить', 'broadcast:cancel'),
+    ],
+  ])
+
+  if (session.photoFileId) {
+    await ctx.replyWithPhoto(session.photoFileId)
+  }
+
+  await ctx.replyWithHTML(message, keyboard)
+}
+
+const startBroadcasting = async (ctx: TextContext | CallbackContext, session: BroadcastSession): Promise<void> => {
+  if (!session.text) {
+    await ctx.reply('Текст рассылки не может быть пустым')
+    return
+  }
+
+  await broadcastQueue.add('send', {
+    adminId: ctx.from.id,
+    contacts: session.contacts,
+    text: session.text,
+    photoFileId: session.photoFileId,
+  })
+
+  await redis.del(`admin:${ctx.from.id}:broadcast`)
+  await ctx.reply(`Рассылка запущена! Будет отправлено ${session.contacts.length} сообщений`)
+}
+
+const isAdmin = (userId?: number): boolean => {
+  if (!userId) return false
+  const adminIds = process.env.ADMIN_IDS?.split(',').map(Number) || []
+  return adminIds.includes(userId)
+}
+
+const adminActions: AdminActionHandlerMap = {
+  commands: {
+    broadcast: async (ctx) => {
+      if (!isAdmin(ctx.from?.id)) {
+        await ctx.reply('У вас нет прав для выполнения этой команды')
+        return
+      }
+
+      await ctx.reply('Пожалуйста, загрузите файл с контактами (каждый ID на новой строке)')
+
+      await redis.set(
+        `admin:${ctx.from?.id}:broadcast`,
+        JSON.stringify({
+          step: 'AWAIT_FILE',
+          contacts: [],
+        } as BroadcastSession)
+      )
+    },
+  },
+
+  messages: {
+    text: async (ctx) => {
+      const session = await getSession(ctx)
+      if (!session || session.step !== 'AWAIT_TEXT') return
+
+      session.text = ctx.message.text
+      session.step = 'MAIN_MENU'
+      await updateSession(ctx, session)
+
+      await showMainMenu(ctx, session)
+    },
+    document: async (ctx) => {
+      const session = await getSession(ctx)
+      if (!session || session.step !== 'AWAIT_FILE') return
+
+      // Проверка что это документ
+      if (!('document' in ctx.message)) {
+        await ctx.reply('Пожалуйста, загрузите файл с контактами')
+        return
+      }
+
+      const doc = ctx.message.document
+
+      // 1. Проверка расширения
+      if (!doc.file_name?.endsWith('.txt')) {
+        await ctx.reply('❌ Файл должен иметь расширение .txt')
+        return
+      }
+
+      // 2. Проверка MIME-типа
+      if (doc.mime_type !== 'text/plain') {
+        await ctx.reply('❌ Неподдерживаемый тип файла. Ожидается текстовый файл')
+        return
+      }
+
+      // 3. Проверка размера
+      const MAX_FILE_SIZE = 1024 * 1024 // 1MB
+      if (doc.file_size && doc.file_size > MAX_FILE_SIZE) {
+        await ctx.reply(`❌ Файл слишком большой (${(doc.file_size / 1024).toFixed(2)}KB). Максимум 1MB`)
+        return
+      }
+
+      // 4. Загрузка и обработка
+      let contacts = await processContactsFile(bot, doc.file_id)
+
+      // 5. Проверка содержимого
+      if (contacts.length === 0) {
+        await ctx.reply('❌ Файл не содержит валидных контактов. Формат: каждый ID на новой строке')
+        return
+      }
+
+      // 6. Проверка количества
+      const MAX_CONTACTS = 10000
+      if (contacts.length > MAX_CONTACTS) {
+        await ctx.reply(`❌ Слишком много контактов (${contacts.length}). Максимум ${MAX_CONTACTS}`)
+        return
+      }
+
+      // 7. Удаление дубликатов
+      const uniqueContacts = [...new Set(contacts)]
+      if (uniqueContacts.length !== contacts.length) {
+        await ctx.reply(`⚠️ Удалено ${contacts.length - uniqueContacts.length} дубликатов`)
+        contacts = uniqueContacts
+      }
+
+      session.contacts = contacts
+      session.step = 'AWAIT_TEXT'
+      await updateSession(ctx, session)
+
+      await ctx.reply(`✅ Загружено ${contacts.length} контактов. Теперь отправьте текст для рассылки:`)
+    },
+    photo: async (ctx) => {
+      const session = await getSession(ctx)
+      if (!session || session.step !== 'AWAIT_PHOTO') return
+
+      session.photoFileId = ctx.message.photo[ctx.message.photo.length - 1].file_id
+      session.step = 'MAIN_MENU'
+      await updateSession(ctx, session)
+
+      await showMainMenu(ctx, session)
+    },
+  },
+
+  callbacks: {
+    'broadcast:edit_text': async (ctx) => {
+      const session = await getSession(ctx)
+      if (!session || session.step !== 'MAIN_MENU') return
+
+      session.step = 'AWAIT_TEXT'
+      await updateSession(ctx, session)
+      await ctx.reply('Введите новый текст для рассылки:')
+      await ctx.answerCbQuery()
+    },
+
+    'broadcast:edit_photo': async (ctx) => {
+      const session = await getSession(ctx)
+      if (!session || session.step !== 'MAIN_MENU') return
+
+      session.step = 'AWAIT_PHOTO'
+      await updateSession(ctx, session)
+      await ctx.reply('Отправьте новое фото для рассылки:')
+      await ctx.answerCbQuery()
+    },
+
+    'broadcast:start': async (ctx) => {
+      const session = await getSession(ctx)
+      if (!session || session.step !== 'MAIN_MENU') return
+
+      await startBroadcasting(ctx, session)
+      await ctx.answerCbQuery()
+    },
+
+    'broadcast:cancel': async (ctx) => {
+      await redis.del(`admin:${ctx.from.id}:broadcast`)
+      await ctx.reply('Рассылка отменена')
+      await ctx.answerCbQuery()
+    },
+  },
+}
+
+export { adminActions }
