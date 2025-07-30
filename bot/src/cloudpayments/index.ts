@@ -55,7 +55,7 @@ new Worker<CloudpaymentsQueuePayload>(
         },
       })
 
-      googleSheetQueue.add('update', {
+      await googleSheetQueue.add('update', {
         user_id: payments.user.id,
         user_telegram_id: payments.user.telegramId,
         payment_status: 'PAID',
@@ -90,7 +90,7 @@ new Worker<CloudpaymentsQueuePayload>(
         },
       })
 
-      googleSheetQueue.add('update', {
+      await googleSheetQueue.add('update', {
         user_id: payments.user.id,
         user_telegram_id: payments.user.telegramId,
         stage: 'FAILED',

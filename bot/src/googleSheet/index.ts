@@ -75,19 +75,21 @@ const startSheetsManager = () => {
 /**
  * FIRST INIT FOR SHEETS
  */
-googleSheetQueue.add('update', {
-  user_telegram_id: 'SYSTEM',
-  user_id: 'RESTART',
-  username: '',
-  first_name: '',
-  last_name: '',
-  joined_at: '',
-  ref_code: '',
-  stage: '',
-  amount: '',
-  order_url: '',
-  paid_at: '',
-  payment_status: '',
-})
+googleSheetQueue
+  .add('update', {
+    user_telegram_id: 'SYSTEM',
+    user_id: 'RESTART',
+    username: '',
+    first_name: '',
+    last_name: '',
+    joined_at: '',
+    ref_code: '',
+    stage: '',
+    amount: '',
+    order_url: '',
+    paid_at: '',
+    payment_status: '',
+  })
+  .then(() => {})
 
 startSheetsManager()

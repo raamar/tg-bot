@@ -110,7 +110,7 @@ bot.start(async (ctx) => {
     },
   })
 
-  googleSheetQueue.add('update', {
+  await googleSheetQueue.add('update', {
     user_telegram_id: user.telegramId,
     user_id: user.id,
     username: user.username ?? undefined,

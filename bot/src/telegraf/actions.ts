@@ -50,23 +50,24 @@ export const actionHandlers: ActionHandlerMap = {
       },
     })
 
-    buttons
-      .filter((button) => button.action === 'BUY_LINK')
-      .forEach(({ url, amount }) => {
-        googleSheetQueue.add('update', {
-          user_id: user.id,
-          user_telegram_id: telegramId,
-          payment_status: 'PENDING',
-          amount: String(amount),
-          order_url: url,
-        })
-      })
-
-    googleSheetQueue.add('update', {
-      user_id: user.id,
-      user_telegram_id: telegramId,
-      stage: callback_data,
-    })
+    await Promise.all([
+      ...buttons
+        .filter((button) => button.action === 'BUY_LINK')
+        .map(({ url, amount }) => {
+          googleSheetQueue.add('update', {
+            user_id: user.id,
+            user_telegram_id: telegramId,
+            payment_status: 'PENDING',
+            amount: String(amount),
+            order_url: url,
+          })
+        }),
+      googleSheetQueue.add('update', {
+        user_id: user.id,
+        user_telegram_id: telegramId,
+        stage: callback_data,
+      }),
+    ])
   },
 
   START_FUNNEL: async (ctx) => {

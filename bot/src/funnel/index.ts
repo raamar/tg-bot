@@ -75,23 +75,24 @@ new Worker<FunnelQueuePayload>(
       },
     })
 
-    stage.buttons
-      .filter((button) => button.action === 'BUY_LINK')
-      .forEach(({ url, amount }) => {
-        googleSheetQueue.add('update', {
-          user_id: user.id,
-          user_telegram_id: user.telegramId,
-          payment_status: 'PENDING',
-          amount: String(amount),
-          order_url: url,
-        })
-      })
-
-    googleSheetQueue.add('update', {
-      stage: stage.id,
-      user_id: user.id,
-      user_telegram_id: user.telegramId,
-    })
+    await Promise.all([
+      ...stage.buttons
+        .filter((button) => button.action === 'BUY_LINK')
+        .map(({ url, amount }) =>
+          googleSheetQueue.add('update', {
+            user_id: user.id,
+            user_telegram_id: user.telegramId,
+            payment_status: 'PENDING',
+            amount: String(amount),
+            order_url: url,
+          })
+        ),
+      googleSheetQueue.add('update', {
+        stage: stage.id,
+        user_id: user.id,
+        user_telegram_id: user.telegramId,
+      }),
+    ])
   },
   {
     concurrency: 15,
