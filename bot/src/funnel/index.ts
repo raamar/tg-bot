@@ -76,6 +76,11 @@ new Worker<FunnelQueuePayload>(
     })
 
     await Promise.all([
+      googleSheetQueue.add('update', {
+        stage: stage.id,
+        user_id: user.id,
+        user_telegram_id: user.telegramId,
+      }),
       ...stage.buttons
         .filter((button) => button.action === 'BUY_LINK')
         .map(({ url, amount }) =>
@@ -87,11 +92,6 @@ new Worker<FunnelQueuePayload>(
             order_url: url,
           })
         ),
-      googleSheetQueue.add('update', {
-        stage: stage.id,
-        user_id: user.id,
-        user_telegram_id: user.telegramId,
-      }),
     ])
   },
   {

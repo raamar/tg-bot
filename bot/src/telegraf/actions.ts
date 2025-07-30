@@ -51,6 +51,11 @@ export const actionHandlers: ActionHandlerMap = {
     })
 
     await Promise.all([
+      googleSheetQueue.add('update', {
+        user_id: user.id,
+        user_telegram_id: telegramId,
+        stage: callback_data,
+      }),
       ...buttons
         .filter((button) => button.action === 'BUY_LINK')
         .map(({ url, amount }) => {
@@ -62,11 +67,6 @@ export const actionHandlers: ActionHandlerMap = {
             order_url: url,
           })
         }),
-      googleSheetQueue.add('update', {
-        user_id: user.id,
-        user_telegram_id: telegramId,
-        stage: callback_data,
-      }),
     ])
   },
 
