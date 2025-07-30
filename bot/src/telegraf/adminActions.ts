@@ -168,7 +168,13 @@ const adminActions: AdminActionHandlerMap = {
       const session = await getSession(ctx)
       if (!session || session.step !== 'AWAIT_PHOTO') return
 
-      session.photoFileId = ctx.message.photo[ctx.message.photo.length - 1].file_id
+      const photo = ctx.message.photo[ctx.message.photo.length - 1]
+
+      const file = await ctx.telegram.getFile(photo.file_id)
+
+      const photoUrl = `https://api.telegram.org/file/bot${process.env.TELEGRAM_TOKEN}/${file.file_path}`
+
+      session.photoFileId = photoUrl
       session.step = 'MAIN_MENU'
       await updateSession(ctx, session)
 

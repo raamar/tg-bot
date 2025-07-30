@@ -21,7 +21,7 @@ new Worker<BroadcastJobData>(
     for (const contactId of contacts) {
       try {
         if (photoFileId) {
-          await bot.telegram.sendPhoto(contactId, photoFileId, { caption: text, parse_mode: 'HTML' })
+          await bot.telegram.sendPhoto(contactId, photoFileId)
         }
         await bot.telegram.sendMessage(contactId, text, { parse_mode: 'HTML' })
       } catch (error) {
