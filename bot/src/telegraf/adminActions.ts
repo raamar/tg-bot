@@ -7,6 +7,8 @@ import { processContactsFile } from '../helpers/fileProcessor'
 import { bot } from '.'
 import { restoreHtmlFromEntities } from '../helpers/restoreHtmlFromEntities'
 import { isAdmin } from '../helpers/isAdmin'
+import { prisma } from '../prisma'
+import { generateUserExcelBuffer } from '../helpers/exportToExcel'
 
 const getSession = async (ctx: { from?: { id: number } }): Promise<BroadcastSession | null> => {
   if (!ctx.from) return null
@@ -86,6 +88,32 @@ const adminActions: AdminActionHandlerMap = {
           contacts: [],
         } as BroadcastSession)
       )
+    },
+
+    export: async (ctx) => {
+      if (!isAdmin(ctx.from?.id)) {
+        await ctx.reply('У вас нет прав для выполнения этой команды')
+        return
+      }
+
+      await ctx.reply('⏳ Экспорт данных, пожалуйста подождите...')
+
+      const users = await prisma.user.findMany({
+        include: {
+          funnelProgress: true,
+          payments: true,
+        },
+        orderBy: {
+          createdAt: 'asc',
+        },
+      })
+
+      const buffer = await generateUserExcelBuffer(users)
+
+      await ctx.replyWithDocument({
+        source: buffer,
+        filename: `users_export_${new Date().toISOString().slice(0, 10)}.xlsx`,
+      })
     },
   },
 

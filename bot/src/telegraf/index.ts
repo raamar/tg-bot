@@ -117,6 +117,7 @@ bot.start(async (ctx) => {
 })
 
 bot.command('broadcast', adminActions.commands.broadcast)
+bot.command('export', adminActions.commands.export)
 
 bot.on('message', (ctx, next) => {
   if ('text' in ctx.message) {
