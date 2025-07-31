@@ -55,7 +55,7 @@ new Worker<CloudpaymentsQueuePayload>(
         },
       })
 
-      await Promise.all([
+      const results = await Promise.allSettled([
         bot.telegram.sendMessage(payments.user.telegramId, happyEnd.text, {
           parse_mode: 'HTML',
           reply_markup: {
@@ -84,6 +84,13 @@ new Worker<CloudpaymentsQueuePayload>(
           )
         ),
       ])
+
+      results
+        .filter((result) => result.status === 'rejected')
+        .forEach((rejected) => {
+          console.warn('⚠️ Payment: ', rejected)
+        })
+
       const funnelJobIdToCancel = payments.user.funnelProgress?.nextJobId
 
       if (!funnelJobIdToCancel) {
