@@ -27,6 +27,30 @@ export const googleSheetQueue = new Queue<SheetLog>('googleSheet', {
 const FLUSH_BUFFER_KEY = 'sheets:buffer'
 const PROCESSING_BUFFER_KEY = 'sheets:processing'
 
+const worker = new Worker<SheetLog>(
+  'googleSheet',
+  async (job) => {
+    const payload = job.data
+
+    if (!payload.user_id) {
+      console.warn('⚠️ Google Sheet: Invalid log entry: missing user_id')
+      return
+    }
+
+    const sortedPayload: Record<string, unknown> = Object.keys(payload)
+      .sort()
+      .reduce((acc, key) => {
+        acc[key] = payload[key as keyof SheetLog]
+        return acc
+      }, {} as Record<string, unknown>)
+
+    await redis.rpush(FLUSH_BUFFER_KEY, JSON.stringify(sortedPayload))
+  },
+  {
+    connection: redis,
+  }
+)
+
 setInterval(async () => {
   const bufferExists = await redis.exists(FLUSH_BUFFER_KEY)
   if (!bufferExists) return
@@ -60,3 +84,27 @@ setInterval(async () => {
     await redis.del(PROCESSING_BUFFER_KEY)
   }
 }, FLUSH_INTERVAL_MS)
+
+worker.on('failed', (job, error) => {
+  console.error('❌ Google Sheet: Failed to add data to Redis:', error.message)
+})
+
+/**
+ * FIRST INIT FOR SHEETS
+ */
+googleSheetQueue
+  .add('update', {
+    user_telegram_id: 'SYSTEM',
+    user_id: 'RESTART',
+    username: '',
+    first_name: '',
+    last_name: '',
+    joined_at: '',
+    ref_code: '',
+    stage: '',
+    amount: '',
+    order_url: '',
+    paid_at: '',
+    payment_status: '',
+  })
+  .then(() => {})
