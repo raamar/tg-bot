@@ -6,6 +6,7 @@ import { broadcastQueue } from '../broadcast'
 import { processContactsFile } from '../helpers/fileProcessor'
 import { bot } from '.'
 import { restoreHtmlFromEntities } from '../helpers/restoreHtmlFromEntities'
+import { isAdmin } from '../helpers/isAdmin'
 
 const getSession = async (ctx: { from?: { id: number } }): Promise<BroadcastSession | null> => {
   if (!ctx.from) return null
@@ -66,12 +67,6 @@ const startBroadcasting = async (ctx: TextContext | CallbackContext, session: Br
 
   await redis.del(`admin:${ctx.from.id}:broadcast`)
   await ctx.reply(`Рассылка запущена.`)
-}
-
-const isAdmin = (userId?: number): boolean => {
-  if (!userId) return false
-  const adminIds = process.env.ADMIN_IDS?.split(',').map(Number) || []
-  return adminIds.includes(userId)
 }
 
 const adminActions: AdminActionHandlerMap = {

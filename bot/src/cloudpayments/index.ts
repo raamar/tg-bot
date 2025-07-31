@@ -7,6 +7,7 @@ import { bot } from '../telegraf'
 import { happyEnd } from '../config'
 import { googleSheetQueue } from '../googleSheet'
 import { formatDate } from '../helpers/formatDate'
+import { getAdmins } from '../helpers/getAdmins'
 
 export const cloudpaymentsQueue = new Queue('cloudpayments', {
   connection: redis,
@@ -48,22 +49,35 @@ new Worker<CloudpaymentsQueuePayload>(
         },
       })
 
-      await bot.telegram.sendMessage(payments.user.telegramId, happyEnd.text, {
-        parse_mode: 'HTML',
-        reply_markup: {
-          inline_keyboard: [[{ text: happyEnd.button_text, url: happyEnd.url }]],
-        },
-      })
-
-      await googleSheetQueue.add('update', {
-        user_id: payments.user.id,
-        user_telegram_id: payments.user.telegramId,
-        payment_status: 'PAID',
-        amount: payments.amount.toFixed(2),
-        order_url: String(payments.url),
-        paid_at: formatDate(payments.createdAt),
-      })
-
+      await Promise.all([
+        bot.telegram.sendMessage(payments.user.telegramId, happyEnd.text, {
+          parse_mode: 'HTML',
+          reply_markup: {
+            inline_keyboard: [[{ text: happyEnd.button_text, url: happyEnd.url }]],
+          },
+        }),
+        googleSheetQueue.add('update', {
+          user_id: payments.user.id,
+          user_telegram_id: payments.user.telegramId,
+          payment_status: 'PAID',
+          amount: payments.amount.toFixed(2),
+          order_url: String(payments.url),
+          paid_at: formatDate(payments.createdAt),
+        }),
+        ...getAdmins().map((adminId) =>
+          bot.telegram.sendMessage(
+            adminId,
+            `💸 <b>Оплата подтверждена</b>\n\n` +
+              `👤 Пользователь: <a href="tg://user?id=${payments.user.telegramId}">${payments.user.telegramId}</a>\n` +
+              `🆔 User ID: ${payments.user.id}\n` +
+              `📅 Дата: ${formatDate(payments.createdAt)}\n` +
+              `💰 Сумма: ${payments.amount.toFixed(2)}`,
+            {
+              parse_mode: 'HTML',
+            }
+          )
+        ),
+      ])
       const funnelJobIdToCancel = payments.user.funnelProgress?.nextJobId
 
       if (!funnelJobIdToCancel) {

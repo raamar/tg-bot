@@ -115,7 +115,7 @@ export const funnelMessages: FunnelMessage[] = [
       'Потом всё, цена станет выше. Лови момент 💋</blockquote>\n\n',
       '⚠️<b>Через 24 часа станет дороже</b>⚠️',
     ].join(''),
-    buttons: [{ text: '👉 Купить за 1.490₽', amount: 1490.0, action: 'BUY_LINK' }],
+    buttons: [{ text: '👉 Купить за 1.490₽👈', amount: 1490.0, action: 'BUY_LINK' }],
   },
   {
     id: 'reminder4',
@@ -142,7 +142,8 @@ export const funnelMessages: FunnelMessage[] = [
       'Как говорится, куда еще дешевле 😉</i>\n\n',
       '<b>⚠️Скидка действует только 2 часа⚠️</b>',
     ].join(''),
-    buttons: [{ text: '👉 Купить за 750₽', amount: 750.0, action: 'BUY_LINK' }],
+    // buttons: [{ text: '👉 Купить за 750₽👈', amount: 750.0, action: 'BUY_LINK' }],
+    buttons: [{ text: '👉 Купить за 11₽👈', amount: 11.0, action: 'BUY_LINK' }],
   },
 ]
 
