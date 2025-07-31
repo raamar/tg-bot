@@ -33,6 +33,11 @@ const funnelWorker = new Worker<FunnelQueuePayload>(
       where: { id: userId },
       select: { id: true, telegramId: true, paid: true },
     })
+
+    if (user?.paid) {
+      return
+    }
+
     if (!user?.telegramId) {
       throw new Error(`FUNNEL WORKER: Telegram User not found for ID ${userId}`)
     }

@@ -80,6 +80,7 @@ bot.start(async (ctx) => {
     where: { telegramId: String(id) },
     create: {
       telegramId: String(id),
+      paid: false,
       username,
       firstName: first_name,
       lastName: last_name,
