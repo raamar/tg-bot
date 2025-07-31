@@ -61,7 +61,7 @@ new Worker<CloudpaymentsQueuePayload>(
           user_id: payments.user.id,
           user_telegram_id: payments.user.telegramId,
           payment_status: 'PAID',
-          amount: payments.amount.toFixed(2),
+          amount: String(payments.amount.toNumber()),
           order_url: String(payments.url),
           paid_at: formatDate(payments.paidAt!),
         }),
