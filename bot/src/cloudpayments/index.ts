@@ -88,7 +88,8 @@ new Worker<CloudpaymentsQueuePayload>(
       results
         .filter((result) => result.status === 'rejected')
         .forEach((rejected) => {
-          console.warn('⚠️ Payment: ', rejected)
+          console.warn('⚠️  Payment: ')
+          console.warn(JSON.stringify(rejected, null, 2))
         })
 
       const funnelJobIdToCancel = payments.user.funnelProgress?.nextJobId
