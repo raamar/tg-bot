@@ -19,7 +19,7 @@ export const funnelQueue = new Queue<FunnelQueuePayload>('funnel', {
   },
 })
 
-new Worker<FunnelQueuePayload>(
+const funnelWorker = new Worker<FunnelQueuePayload>(
   'funnel',
   async (job: Job<FunnelQueuePayload>) => {
     const { userId, stageIndex } = job.data
@@ -99,3 +99,7 @@ new Worker<FunnelQueuePayload>(
     connection: redis,
   }
 )
+
+funnelWorker.on('failed', async (job, err) => {
+  console.error(`FUNNEL WORKER: Ошибка в задаче ${job?.id}:`, err.message)
+})

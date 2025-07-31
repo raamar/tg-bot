@@ -35,27 +35,20 @@ const throttler = telegrafThrottler({
 
 bot.use(throttler)
 
-new Worker<Update>(
+const telegramWorker = new Worker<Update>(
   'telegram',
   async (job: Job<Update>) => {
-    try {
-      await bot.handleUpdate(job.data)
-    } catch (error) {
-      let message = error
-
-      if (error instanceof Error) {
-        message = error.message
-      }
-
-      console.error(`TELEGRAM UPDATE: Ошибка в задаче ${job.id}:`, error)
-      throw error
-    }
+    await bot.handleUpdate(job.data)
   },
   {
     concurrency: 10,
     connection: redis,
   }
 )
+
+telegramWorker.on('failed', async (job, err) => {
+  console.error(`TELEGRAM UPDATE: Ошибка в задаче ${job?.id}:`, err.message)
+})
 
 bot.launch({
   webhook: {
