@@ -35,6 +35,7 @@ new Worker<CloudpaymentsQueuePayload>(
           createdAt: true,
           amount: true,
           url: true,
+          paidAt: true,
           user: {
             select: {
               id: true,
@@ -62,15 +63,15 @@ new Worker<CloudpaymentsQueuePayload>(
           payment_status: 'PAID',
           amount: payments.amount.toFixed(2),
           order_url: String(payments.url),
-          paid_at: formatDate(payments.createdAt),
+          paid_at: formatDate(payments.paidAt!),
         }),
         ...getAdmins().map((adminId) =>
           bot.telegram.sendMessage(
             adminId,
-            `💸 <b>Оплата подтверждена</b>\n\n` +
+            `💸 <b>Оплата получена</b>\n\n` +
               `👤 Пользователь: <a href="tg://user?id=${payments.user.telegramId}">${payments.user.telegramId}</a>\n` +
               `🆔 User ID: ${payments.user.id}\n` +
-              `📅 Дата: ${formatDate(payments.createdAt)}\n` +
+              `📅 Дата: ${formatDate(payments.paidAt!)}\n` +
               `💰 Сумма: ${payments.amount.toFixed(2)}`,
             {
               parse_mode: 'HTML',
