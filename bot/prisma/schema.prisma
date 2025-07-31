@@ -18,6 +18,7 @@ model User {
   updatedAt      DateTime        @updatedAt
   funnelProgress FunnelProgress?
   payments       Payment[]
+  paid           Boolean         @default(false)
 }
 
 model FunnelProgress {

@@ -29,7 +29,10 @@ const funnelWorker = new Worker<FunnelQueuePayload>(
       throw new Error(`FUNNEL WORKER: Stage not found for index ${stageIndex}`)
     }
 
-    const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, telegramId: true } })
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, telegramId: true, paid: true },
+    })
     if (!user?.telegramId) {
       throw new Error(`FUNNEL WORKER: Telegram User not found for ID ${userId}`)
     }
@@ -50,7 +53,7 @@ const funnelWorker = new Worker<FunnelQueuePayload>(
     const nextStageIndex = stageIndex + 1
     const nextStage = funnelMessages[nextStageIndex]
 
-    if (nextStage && !stage.stop) {
+    if (nextStage && !stage.stop && !user.paid) {
       const nextJob = await funnelQueue.add(
         `funnel-${userId}-${nextStage.id}`,
         {

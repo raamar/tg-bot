@@ -30,6 +30,11 @@ new Worker<CloudpaymentsQueuePayload>(
         data: {
           status: 'PAID',
           paidAt: new Date(),
+          user: {
+            update: {
+              paid: true,
+            },
+          },
         },
         select: {
           createdAt: true,
