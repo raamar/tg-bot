@@ -41,14 +41,14 @@ export const generateUserExcelBuffer = async (users: ExportUser[]): Promise<Buff
       username: user.username || '',
       firstName: user.firstName || '',
       lastName: user.lastName || '',
-      createdDate: formatDate(user.createdAt),
-      createdTime: formatDate(user.createdAt),
+      createdDate: formatDate(user.createdAt).split(' ')[0],
+      createdTime: formatDate(user.createdAt).split(' ')[1],
       refSource: user.refSource || '',
       stageId: user.funnelProgress?.stageId || '',
       amount: paidPayment?.amount?.toString() || '',
       url: paidPayment?.url || '',
-      paidDate: paidPayment?.paidAt ? formatDate(paidPayment.paidAt) : '',
-      paidTime: paidPayment?.paidAt ? formatDate(paidPayment.paidAt) : '',
+      paidDate: paidPayment?.paidAt ? formatDate(paidPayment.paidAt).split(' ')[0] : '',
+      paidTime: paidPayment?.paidAt ? formatDate(paidPayment.paidAt).split(' ')[1] : '',
     })
   }
 
