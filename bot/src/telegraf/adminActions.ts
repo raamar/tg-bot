@@ -104,7 +104,6 @@ const adminActions: AdminActionHandlerMap = {
       const session = await getSession(ctx)
       if (!session || session.step !== 'AWAIT_FILE') return
 
-      // Проверка что это документ
       if (!('document' in ctx.message)) {
         await ctx.reply('Пожалуйста, загрузите файл с контактами')
         return
@@ -112,42 +111,35 @@ const adminActions: AdminActionHandlerMap = {
 
       const doc = ctx.message.document
 
-      // 1. Проверка расширения
       if (!doc.file_name?.endsWith('.txt')) {
         await ctx.reply('❌ Файл должен иметь расширение .txt')
         return
       }
 
-      // 2. Проверка MIME-типа
       if (doc.mime_type !== 'text/plain') {
         await ctx.reply('❌ Неподдерживаемый тип файла. Ожидается текстовый файл')
         return
       }
 
-      // 3. Проверка размера
       const MAX_FILE_SIZE = 1024 * 1024 // 1MB
       if (doc.file_size && doc.file_size > MAX_FILE_SIZE) {
         await ctx.reply(`❌ Файл слишком большой (${(doc.file_size / 1024).toFixed(2)}KB). Максимум 1MB`)
         return
       }
 
-      // 4. Загрузка и обработка
       let contacts = await processContactsFile(bot, doc.file_id)
 
-      // 5. Проверка содержимого
       if (contacts.length === 0) {
         await ctx.reply('❌ Файл не содержит валидных контактов. Формат: каждый ID на новой строке')
         return
       }
 
-      // 6. Проверка количества
       const MAX_CONTACTS = 10000
       if (contacts.length > MAX_CONTACTS) {
         await ctx.reply(`❌ Слишком много контактов (${contacts.length}). Максимум ${MAX_CONTACTS}`)
         return
       }
 
-      // 7. Удаление дубликатов
       const uniqueContacts = [...new Set(contacts)]
       if (uniqueContacts.length !== contacts.length) {
         await ctx.reply(`⚠️ Удалено ${contacts.length - uniqueContacts.length} дубликатов`)
