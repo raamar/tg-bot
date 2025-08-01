@@ -71,17 +71,9 @@ new Worker<CloudpaymentsQueuePayload>(
           paid_at: formatDate(payments.paidAt!),
         }),
         ...getAdmins().map((adminId) =>
-          bot.telegram.sendMessage(
-            adminId,
-            `💸 <b>Оплата получена</b>\n\n` +
-              `👤 Пользователь: <a href="tg://user?id=${payments.user.telegramId}">${payments.user.telegramId}</a>\n` +
-              `🆔 User ID: ${payments.user.id}\n` +
-              `📅 Дата: ${formatDate(payments.paidAt!)}\n` +
-              `💰 Сумма: ${payments.amount.toFixed(2)}`,
-            {
-              parse_mode: 'HTML',
-            }
-          )
+          bot.telegram.sendMessage(adminId, `🦶 Купили гайд!\n` + `💰 Сумма: ${payments.amount.toFixed(2)} ₽`, {
+            parse_mode: 'HTML',
+          })
         ),
       ])
 
