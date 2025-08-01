@@ -141,7 +141,6 @@ export const actionHandlers: ActionHandlerMap = {
         funnelProgress: {
           select: {
             stageId: true,
-            completed: true,
           },
         },
       },
@@ -151,12 +150,7 @@ export const actionHandlers: ActionHandlerMap = {
     const stage = funnelMessages[stageIndex]
     const nextStageIndex = stageIndex + 1
     const nextStage = funnelMessages[nextStageIndex]
-
-    if (user.funnelProgress?.completed) {
-      await ctx.reply('Вы уже прошли этот этап. Спасибо за участие!')
-      return
-    }
-
+    let nextJobId = null
     if (!user.funnelProgress) {
       console.warn(`User ${user.id} has no funnel progress`)
       return
@@ -164,22 +158,27 @@ export const actionHandlers: ActionHandlerMap = {
 
     await actionHandlers.DEFAULT(ctx)
 
-    const nextJob = await funnelQueue.add(
-      `funnel-${user.id}-${nextStage.id}`,
-      {
-        userId: user.id,
-        stageIndex: nextStageIndex,
-      },
-      { delay: process.env.NODE_ENV === 'development' ? 10000 : nextStage.delayMs }
-    )
+    if (nextStage) {
+      const nextJob = await funnelQueue.add(
+        `funnel-${user.id}-${nextStage.id}`,
+        {
+          userId: user.id,
+          stageIndex: nextStageIndex,
+        },
+        { delay: process.env.NODE_ENV === 'development' ? 10000 : nextStage.delayMs }
+      )
+
+      nextJobId = nextJob.id
+    }
+
     await prisma.funnelProgress.update({
       where: { userId: user.id },
       data: {
         stageId: stage.id,
-        nextJobId: nextJob.id,
+        nextJobId,
         stageIndex: stageIndex + 1,
-        nextRunAt: new Date(Date.now() + nextStage.delayMs),
-        completed: false,
+        nextRunAt: nextStage ? new Date(Date.now() + nextStage.delayMs) : null,
+        completed: !nextStage,
       },
     })
   },
