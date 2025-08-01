@@ -81,21 +81,15 @@ export const actionHandlers: ActionHandlerMap = {
 
     const telegramId = String(ctx.from.id)
 
-    const user = await prisma.user.upsert({
+    const user = await prisma.user.findFirst({
       where: { telegramId },
-      update: {
-        updatedAt: new Date(),
-        username: ctx.from.username,
-        firstName: ctx.from.first_name,
-        lastName: ctx.from.last_name,
-      },
-      create: {
-        telegramId,
-        username: ctx.from.username,
-        firstName: ctx.from.first_name,
-        lastName: ctx.from.last_name,
-      },
+      select: { id: true },
     })
+
+    if (!user) {
+      await ctx.reply(default403Message)
+      return
+    }
 
     const nextJob = await funnelQueue.add(
       `funnel-${user.id}-${funnelMessages[0].id}`,
