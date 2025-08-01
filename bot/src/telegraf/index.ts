@@ -90,6 +90,7 @@ bot.start(async (ctx) => {
       username,
       firstName: first_name,
       lastName: last_name,
+      paid: true,
     },
   })
 
