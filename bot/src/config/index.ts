@@ -136,3 +136,4 @@ export const funnelMessages: FunnelMessage[] = [
 
 export const defaultExpirationMessage = 'Вы уже открыли этот раздел ✅'
 export const default403Message = '👉 Для начала введите /start'
+export const default500Message = 'Произошла ошибка. Попробуйте еще раз позже.'

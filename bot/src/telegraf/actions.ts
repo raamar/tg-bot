@@ -1,6 +1,12 @@
 import { FmtString } from 'telegraf/format'
 import { ActionHandlerMap } from '../types/funnel'
-import { actionsMessages, default403Message, defaultExpirationMessage, funnelMessages } from '../config'
+import {
+  actionsMessages,
+  default403Message,
+  default500Message,
+  defaultExpirationMessage,
+  funnelMessages,
+} from '../config'
 import { redis } from '../redis'
 import { inline_keyboard_generate } from '../helpers/inline_keyboard_generate'
 import { prisma } from '../prisma'
@@ -122,20 +128,8 @@ export const actionHandlers: ActionHandlerMap = {
   SUBSCRIBE: async (ctx) => {
     const telegramId = String(ctx.from.id)
 
-    const user = await prisma.user.upsert({
+    const user = await prisma.user.findFirst({
       where: { telegramId },
-      update: {
-        updatedAt: new Date(),
-        username: ctx.from.username,
-        firstName: ctx.from.first_name,
-        lastName: ctx.from.last_name,
-      },
-      create: {
-        telegramId,
-        username: ctx.from.username,
-        firstName: ctx.from.first_name,
-        lastName: ctx.from.last_name,
-      },
       select: {
         id: true,
         funnelProgress: {
@@ -146,13 +140,21 @@ export const actionHandlers: ActionHandlerMap = {
       },
     })
 
+    if (!user) {
+      await ctx.reply(default403Message)
+      return
+    }
+
     const stageIndex = funnelMessages.findIndex((stage) => stage.id === user.funnelProgress!.stageId)
     const stage = funnelMessages[stageIndex]
     const nextStageIndex = stageIndex + 1
     const nextStage = funnelMessages[nextStageIndex]
     let nextJobId = null
+
     if (!user.funnelProgress) {
       console.warn(`User ${user.id} has no funnel progress`)
+
+      await ctx.reply(default500Message)
       return
     }
 
