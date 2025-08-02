@@ -103,7 +103,10 @@ export const actionHandlers: ActionHandlerMap = {
         userId: user.id,
         stageIndex: 0,
       },
-      { delay: process.env.NODE_ENV === 'development' ? 10000 : funnelMessages[0].delayMs }
+      {
+        delay: process.env.NODE_ENV === 'development' ? 10000 : funnelMessages[0].delayMs,
+        jobId: `funnel-${user.id}-${funnelMessages[0].id}`,
+      }
     )
 
     await prisma.funnelProgress.upsert({
@@ -173,7 +176,10 @@ export const actionHandlers: ActionHandlerMap = {
           userId: user.id,
           stageIndex: nextStageIndex,
         },
-        { delay: process.env.NODE_ENV === 'development' ? 10000 : nextStage.delayMs }
+        {
+          delay: process.env.NODE_ENV === 'development' ? 10000 : nextStage.delayMs,
+          jobId: `funnel-${user.id}-${nextStage.id}`,
+        }
       )
 
       nextJobId = nextJob.id

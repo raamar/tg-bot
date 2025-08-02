@@ -66,7 +66,10 @@ const funnelWorker = new Worker<FunnelQueuePayload>(
           stageIndex: nextStageIndex,
         },
 
-        { delay: process.env.NODE_ENV === 'development' ? 10000 : nextStage.delayMs }
+        {
+          delay: process.env.NODE_ENV === 'development' ? 10000 : nextStage.delayMs,
+          jobId: `funnel-${userId}-${nextStage.id}`,
+        }
       )
 
       nextJobId = nextJob.id
@@ -103,7 +106,7 @@ const funnelWorker = new Worker<FunnelQueuePayload>(
     ])
   },
   {
-    concurrency: 15,
+    concurrency: 100,
     connection: redis,
   }
 )
