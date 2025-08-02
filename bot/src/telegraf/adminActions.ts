@@ -112,7 +112,7 @@ const adminActions: AdminActionHandlerMap = {
         return
       }
 
-      await Promise.allSettled(
+      const result = await Promise.allSettled(
         funnelMessages.map(async ({ id: stageId }) => {
           try {
             const job = await funnelQueue.getJob(`funnel-${user.id}-${stageId}`)
@@ -124,9 +124,18 @@ const adminActions: AdminActionHandlerMap = {
             }
 
             console.error('ОШИБКА ПРИ /stop:', message)
+
+            return Promise.reject()
           }
         })
       )
+
+      if (result.filter((item) => item.status === 'fulfilled').length > 0) {
+        ctx.reply('Вы остановили рассылку.')
+        return
+      }
+
+      ctx.reply('Вы не учавствуете в рассылке')
     },
 
     export: async (ctx) => {
