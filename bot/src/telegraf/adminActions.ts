@@ -95,9 +95,17 @@ const adminActions: AdminActionHandlerMap = {
     stop: async (ctx) => {
       const telegramId = String(ctx?.from?.id)
 
-      const user = await prisma.user.findFirst({
+      const user = await prisma.user.update({
         where: { telegramId },
         select: { id: true },
+        data: {
+          funnelProgress: {
+            update: {
+              nextJobId: null,
+              nextRunAt: null,
+            },
+          },
+        },
       })
 
       if (!user) {
