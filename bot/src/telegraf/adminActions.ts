@@ -134,6 +134,12 @@ const adminActions: AdminActionHandlerMap = {
         })
       )
 
+      const actionKeyPattern = `user:${telegramId}:action:*`
+      const actionKeys = await redis.keys(actionKeyPattern)
+      if (actionKeys.length > 0) {
+        await redis.del(...actionKeys)
+      }
+
       if (result.filter((item) => item.status === 'fulfilled').length > 0) {
         ctx.reply('Вы остановили рассылку.')
         return
