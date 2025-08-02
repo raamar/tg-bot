@@ -30,14 +30,14 @@ export const actionHandlers: ActionHandlerMap = {
 
     if (alreadyDone) {
       await ctx.reply(defaultExpirationMessage)
-      return
+      return false
     }
 
     const user = await prisma.user.findFirst({ where: { telegramId }, select: { id: true } })
 
     if (!user) {
       await ctx.reply(default403Message)
-      return
+      return false
     }
 
     await redis.set(key, '1', 'EX', Number(process.env.TELEGRAM_STEPS_EXPIRE))
@@ -74,10 +74,16 @@ export const actionHandlers: ActionHandlerMap = {
           })
         }),
     ])
+
+    return true
   },
 
   START_FUNNEL: async (ctx) => {
-    await actionHandlers.DEFAULT(ctx)
+    const defaultResult = await actionHandlers.DEFAULT(ctx)
+
+    if (!defaultResult) {
+      return false
+    }
 
     const telegramId = String(ctx.from.id)
 
@@ -88,7 +94,7 @@ export const actionHandlers: ActionHandlerMap = {
 
     if (!user) {
       await ctx.reply(default403Message)
-      return
+      return false
     }
 
     const nextJob = await funnelQueue.add(
@@ -118,6 +124,8 @@ export const actionHandlers: ActionHandlerMap = {
         nextRunAt: new Date(Date.now() + funnelMessages[0].delayMs),
       },
     })
+
+    return true
   },
   SUBSCRIBE: async (ctx) => {
     const telegramId = String(ctx.from.id)
@@ -136,7 +144,7 @@ export const actionHandlers: ActionHandlerMap = {
 
     if (!user) {
       await ctx.reply(default403Message)
-      return
+      return false
     }
 
     const stageIndex = funnelMessages.findIndex((stage) => stage.id === user.funnelProgress!.stageId)
@@ -149,10 +157,14 @@ export const actionHandlers: ActionHandlerMap = {
       console.warn(`User ${user.id} has no funnel progress`)
 
       await ctx.reply(default500Message)
-      return
+      return false
     }
 
-    await actionHandlers.DEFAULT(ctx)
+    const defaultResult = await actionHandlers.DEFAULT(ctx)
+
+    if (!defaultResult) {
+      return false
+    }
 
     if (nextStage) {
       const nextJob = await funnelQueue.add(
@@ -177,5 +189,7 @@ export const actionHandlers: ActionHandlerMap = {
         completed: !nextStage,
       },
     })
+
+    return true
   },
 }

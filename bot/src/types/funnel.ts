@@ -28,11 +28,11 @@ export type FunnelMessage = {
 export type ActionMessage = Omit<FunnelMessage, 'delayMs' | 'id'>
 
 export type ActionHandlerMap = {
-  DEFAULT: (ctx: NarrowedContext<Context, Update.CallbackQueryUpdate<CallbackQuery>>) => Promise<void>
+  DEFAULT: (ctx: NarrowedContext<Context, Update.CallbackQueryUpdate<CallbackQuery>>) => Promise<boolean>
 } & {
   [K in Exclude<SendActionType, 'START'>]?: (
     ctx: NarrowedContext<Context, Update.CallbackQueryUpdate<CallbackQuery>>
-  ) => Promise<void>
+  ) => Promise<boolean>
 }
 
 export type FunnelQueuePayload = {
