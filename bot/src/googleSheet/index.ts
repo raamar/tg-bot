@@ -32,6 +32,11 @@ const worker = new Worker<SheetLog>(
   async (job) => {
     const payload = job.data
 
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('⚠️ Google Sheet: Skip log because development')
+      return
+    }
+
     if (!payload.user_id) {
       console.warn('⚠️ Google Sheet: Invalid log entry: missing user_id')
       return
@@ -51,39 +56,41 @@ const worker = new Worker<SheetLog>(
   }
 )
 
-setInterval(async () => {
-  const bufferExists = await redis.exists(FLUSH_BUFFER_KEY)
-  if (!bufferExists) return
+if (process.env.NODE_ENV !== 'development') {
+  setInterval(async () => {
+    const bufferExists = await redis.exists(FLUSH_BUFFER_KEY)
+    if (!bufferExists) return
 
-  const count = await redis.llen(FLUSH_BUFFER_KEY)
-  if (count === 0) return
+    const count = await redis.llen(FLUSH_BUFFER_KEY)
+    if (count === 0) return
 
-  const renamed = await redis.rename(FLUSH_BUFFER_KEY, PROCESSING_BUFFER_KEY).catch((err) => {
-    if (err.message.includes('no such key')) {
-      return false
+    const renamed = await redis.rename(FLUSH_BUFFER_KEY, PROCESSING_BUFFER_KEY).catch((err) => {
+      if (err.message.includes('no such key')) {
+        return false
+      }
+      throw err
+    })
+
+    if (renamed === false) return
+
+    const items = await redis.lrange(PROCESSING_BUFFER_KEY, 0, -1)
+    const parsed: SheetLog[] = items.map((item) => JSON.parse(item))
+
+    try {
+      await axios.post(SHEETS_ENDPOINT, parsed)
+      await redis.del(PROCESSING_BUFFER_KEY)
+      console.log('✅ Google Sheet: log sent.')
+    } catch (err) {
+      console.error('❌ Google Sheet: Failed to send data to Sheets:', err)
+
+      if (parsed.length > 0) {
+        const values = parsed.map((item) => JSON.stringify(item))
+        await redis.lpush(FLUSH_BUFFER_KEY, ...values.reverse())
+      }
+      await redis.del(PROCESSING_BUFFER_KEY)
     }
-    throw err
-  })
-
-  if (renamed === false) return
-
-  const items = await redis.lrange(PROCESSING_BUFFER_KEY, 0, -1)
-  const parsed: SheetLog[] = items.map((item) => JSON.parse(item))
-
-  try {
-    await axios.post(SHEETS_ENDPOINT, parsed)
-    await redis.del(PROCESSING_BUFFER_KEY)
-    console.log('✅ Google Sheet: log sent.')
-  } catch (err) {
-    console.error('❌ Google Sheet: Failed to send data to Sheets:', err)
-
-    if (parsed.length > 0) {
-      const values = parsed.map((item) => JSON.stringify(item))
-      await redis.lpush(FLUSH_BUFFER_KEY, ...values.reverse())
-    }
-    await redis.del(PROCESSING_BUFFER_KEY)
-  }
-}, FLUSH_INTERVAL_MS)
+  }, FLUSH_INTERVAL_MS)
+}
 
 worker.on('failed', (job, error) => {
   console.error('❌ Google Sheet: Failed to add data to Redis:', error.message)
