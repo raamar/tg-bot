@@ -41,7 +41,7 @@ const telegramWorker = new Worker<Update>(
     await bot.handleUpdate(job.data)
   },
   {
-    concurrency: 10,
+    concurrency: 100,
     connection: redis,
   }
 )
@@ -57,18 +57,35 @@ bot.launch({
   },
 })
 
+const withErrorHandling = (handler: Parameters<typeof bot.action>[1]) => {
+  return async (ctx: any, next: any) => {
+    try {
+      //@ts-ignore
+      await handler(ctx, next)
+    } catch (err) {
+      let message = err
+
+      if (err instanceof Error) {
+        message = err.message
+      }
+      console.error(`Ошибка в обработчике action:`, message)
+      await ctx.reply('Произошла ошибка, попробуйте позже.')
+    }
+  }
+}
+
 for (const [pattern, handler] of Object.entries(adminActions.callbacks)) {
-  bot.action(pattern, handler)
+  bot.action(pattern, withErrorHandling(handler))
 }
 
 for (const [action] of Object.entries(actionsMessages)) {
   const customHandler = actionHandlers[action as keyof typeof actionHandlers]
 
   if (customHandler) {
-    bot.action(action, customHandler)
+    bot.action(action, withErrorHandling(customHandler))
     continue
   }
-  bot.action(action, actionHandlers.DEFAULT)
+  bot.action(action, withErrorHandling(actionHandlers.DEFAULT))
 }
 
 bot.start(async (ctx) => {
