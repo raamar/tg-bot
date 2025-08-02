@@ -21,6 +21,7 @@ export type AdminActionHandlerMap = {
   commands: {
     broadcast: CommandHandler
     export: CommandHandler
+    stop: CommandHandler
   }
 
   // Обработчики сообщений

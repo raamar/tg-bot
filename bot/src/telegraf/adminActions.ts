@@ -9,6 +9,8 @@ import { restoreHtmlFromEntities } from '../helpers/restoreHtmlFromEntities'
 import { isAdmin } from '../helpers/isAdmin'
 import { prisma } from '../prisma'
 import { generateUserExcelBuffer } from '../helpers/exportToExcel'
+import { funnelQueue } from '../funnel'
+import { funnelMessages } from '../config'
 
 const getSession = async (ctx: { from?: { id: number } }): Promise<BroadcastSession | null> => {
   if (!ctx.from) return null
@@ -87,6 +89,35 @@ const adminActions: AdminActionHandlerMap = {
           step: 'AWAIT_FILE',
           contacts: [],
         } as BroadcastSession)
+      )
+    },
+
+    stop: async (ctx) => {
+      const telegramId = String(ctx?.from?.id)
+
+      const user = await prisma.user.findFirst({
+        where: { telegramId },
+        select: { id: true },
+      })
+
+      if (!user) {
+        return
+      }
+
+      await Promise.allSettled(
+        funnelMessages.map(async ({ id: stageId }) => {
+          try {
+            const job = await funnelQueue.getJob(`funnel-${user.id}-${stageId}`)
+            if (job) await job.remove()
+          } catch (error) {
+            let message = error
+            if (error instanceof Error) {
+              message = error.message
+            }
+
+            console.error('ОШИБКА ПРИ /stop:', message)
+          }
+        })
       )
     },
 
