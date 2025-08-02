@@ -116,7 +116,11 @@ const adminActions: AdminActionHandlerMap = {
         funnelMessages.map(async ({ id: stageId }) => {
           try {
             const job = await funnelQueue.getJob(`funnel-${user.id}-${stageId}`)
-            if (job) await job.remove()
+            if (job) {
+              return await job.remove()
+            }
+
+            return Promise.reject()
           } catch (error) {
             let message = error
             if (error instanceof Error) {
