@@ -3,7 +3,7 @@ import { ActionMessage, FunnelMessage, SendActionType } from '../types/funnel'
 export const happyEnd = {
   text: ['✅ Оплата прошла! ✅\n\n', 'Спасибо за доверие! Получи доступ к гайду по ссылке ниже.\n\n'].join(''),
   button_text: '👉 Получить гайд 👈',
-  url: 'https://t.me/+lLncxyeRls5lZTMy',
+  url: 'https://t.me/+F6qrwUhtmBs2MjEy',
 }
 
 export const actionsMessages: Record<Exclude<SendActionType, 'BUY_LINK' | 'DEFAULT'>, ActionMessage> = {
