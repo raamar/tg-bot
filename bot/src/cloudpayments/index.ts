@@ -5,8 +5,6 @@ import { prisma } from '../prisma'
 import { funnelQueue } from '../funnel'
 import { bot } from '../telegraf'
 import { happyEnd } from '../config'
-import { googleSheetQueue } from '../googleSheet'
-import { formatDate } from '../helpers/formatDate'
 import { getAdmins } from '../helpers/getAdmins'
 
 export const cloudpaymentsQueue = new Queue('cloudpayments', {
@@ -62,14 +60,6 @@ new Worker<CloudpaymentsQueuePayload>(
             inline_keyboard: [[{ text: happyEnd.button_text, url: happyEnd.url }]],
           },
         }),
-        googleSheetQueue.add('update', {
-          user_id: payments.user.id,
-          user_telegram_id: payments.user.telegramId,
-          payment_status: 'PAID',
-          amount: String(payments.amount.toNumber()),
-          order_url: String(payments.url),
-          paid_at: formatDate(payments.paidAt!),
-        }),
         ...getAdmins().map((adminId) =>
           bot.telegram.sendMessage(adminId, `🦶 Купили гайд!\n` + `💰 Сумма: ${payments.amount.toFixed(2)} ₽`, {
             parse_mode: 'HTML',
@@ -108,12 +98,6 @@ new Worker<CloudpaymentsQueuePayload>(
         select: {
           user: { select: { id: true, telegramId: true } },
         },
-      })
-
-      await googleSheetQueue.add('update', {
-        user_id: payments.user.id,
-        user_telegram_id: payments.user.telegramId,
-        stage: 'FAILED',
       })
       throw error
     }

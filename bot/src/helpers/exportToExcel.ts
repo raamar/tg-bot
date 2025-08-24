@@ -2,7 +2,7 @@ import ExcelJS from 'exceljs'
 import { User, PaymentStatus } from '@prisma/client'
 import { formatDate } from './formatDate'
 
-type ExportUser = User & {
+export type ExportUser = User & {
   funnelProgress?: {
     stageId: string
   } | null

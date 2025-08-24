@@ -7,7 +7,6 @@ import { inline_keyboard_generate } from '../helpers/inline_keyboard_generate'
 import { bot } from '../telegraf'
 import { insertPaymentUrlToButtons } from '../insertPaymentUrlToButtons'
 import { FmtString } from 'telegraf/format'
-import { googleSheetQueue } from '../googleSheet'
 
 export const funnelQueue = new Queue<FunnelQueuePayload>('funnel', {
   connection: redis,
@@ -85,25 +84,6 @@ const funnelWorker = new Worker<FunnelQueuePayload>(
         completed: !nextStage,
       },
     })
-
-    await Promise.all([
-      googleSheetQueue.add('update', {
-        stage: stage.id,
-        user_id: user.id,
-        user_telegram_id: user.telegramId,
-      }),
-      ...stage.buttons
-        .filter((button) => button.action === 'BUY_LINK')
-        .map(({ url, amount }) =>
-          googleSheetQueue.add('update', {
-            user_id: user.id,
-            user_telegram_id: user.telegramId,
-            payment_status: 'PENDING',
-            amount: String(amount),
-            order_url: url,
-          })
-        ),
-    ])
   },
   {
     concurrency: 100,

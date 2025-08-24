@@ -12,7 +12,6 @@ import { inline_keyboard_generate } from '../helpers/inline_keyboard_generate'
 import { prisma } from '../prisma'
 import { funnelQueue } from '../funnel'
 import { insertPaymentUrlToButtons } from '../insertPaymentUrlToButtons'
-import { googleSheetQueue } from '../googleSheet'
 
 export const actionHandlers: ActionHandlerMap = {
   DEFAULT: async (ctx) => {
@@ -55,25 +54,6 @@ export const actionHandlers: ActionHandlerMap = {
         inline_keyboard: inline_keyboard_generate(buttons),
       },
     })
-
-    await Promise.all([
-      googleSheetQueue.add('update', {
-        user_id: user.id,
-        user_telegram_id: telegramId,
-        stage: callback_data,
-      }),
-      ...buttons
-        .filter((button) => button.action === 'BUY_LINK')
-        .map(({ url, amount }) => {
-          googleSheetQueue.add('update', {
-            user_id: user.id,
-            user_telegram_id: telegramId,
-            payment_status: 'PENDING',
-            amount: String(amount),
-            order_url: url,
-          })
-        }),
-    ])
 
     return true
   },
