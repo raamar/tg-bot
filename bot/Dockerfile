@@ -12,6 +12,8 @@ COPY . .
 
 RUN pnpm db:generate
 
+ENV NODE_OPTIONS="--max-old-space-size=2048"
+
 RUN pnpm build
 FROM node:20-slim
 

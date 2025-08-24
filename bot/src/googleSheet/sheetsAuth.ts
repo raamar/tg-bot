@@ -1,4 +1,5 @@
-import { google, type sheets_v4 } from 'googleapis'
+import { GoogleAuth } from 'google-auth-library'
+import { sheets, type sheets_v4 } from '@googleapis/sheets'
 
 type CreateClientOpts = {
   keyFilePathEnv?: string
@@ -16,21 +17,21 @@ export const createSheetsClient = async (opts: CreateClientOpts = {}): Promise<s
 
   if (b64) {
     const json = JSON.parse(Buffer.from(b64, 'base64').toString('utf8'))
-    const auth = new google.auth.GoogleAuth({ credentials: json, scopes })
-    return google.sheets({ version: 'v4', auth })
+    const auth = new GoogleAuth({ credentials: json, scopes })
+    return sheets({ version: 'v4', auth })
   }
 
   if (raw) {
     const json = JSON.parse(raw)
-    const auth = new google.auth.GoogleAuth({ credentials: json, scopes })
-    return google.sheets({ version: 'v4', auth })
+    const auth = new GoogleAuth({ credentials: json, scopes })
+    return sheets({ version: 'v4', auth })
   }
 
   if (keyFile) {
-    const auth = new google.auth.GoogleAuth({ keyFile, scopes })
-    return google.sheets({ version: 'v4', auth })
+    const auth = new GoogleAuth({ keyFile, scopes })
+    return sheets({ version: 'v4', auth })
   }
 
-  const auth = new google.auth.GoogleAuth({ scopes })
-  return google.sheets({ version: 'v4', auth })
+  const auth = new GoogleAuth({ scopes })
+  return sheets({ version: 'v4', auth })
 }

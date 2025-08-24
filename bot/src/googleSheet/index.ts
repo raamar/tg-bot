@@ -1,4 +1,5 @@
-import { type sheets_v4 } from 'googleapis'
+import { type sheets_v4 } from '@googleapis/sheets'
+
 import { prisma } from '../prisma'
 import { ExportUser } from '../helpers/exportToExcel'
 import { createSheetsClient } from './sheetsAuth'

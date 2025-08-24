@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@googleapis/sheets':
+        specifier: ^11.1.0
+        version: 11.1.0
       '@prisma/client':
         specifier: ^6.12.0
         version: 6.12.0(prisma@6.12.0(typescript@5.8.3))(typescript@5.8.3)
@@ -23,9 +26,9 @@ importers:
       exceljs:
         specifier: ^4.4.0
         version: 4.4.0
-      googleapis:
-        specifier: ^157.0.0
-        version: 157.0.0
+      google-auth-library:
+        specifier: ^10.2.1
+        version: 10.2.1
       ioredis:
         specifier: ^5.6.1
         version: 5.6.1
@@ -60,6 +63,10 @@ packages:
 
   '@fast-csv/parse@4.3.6':
     resolution: {integrity: sha512-uRsLYksqpbDmWaSmzvJcuApSEe38+6NQZBUsuAyMZKqHxH0g1wcJgsKUvN3WC8tewaqFjBMMGrkHmC+T7k8LvA==}
+
+  '@googleapis/sheets@11.1.0':
+    resolution: {integrity: sha512-UsbODCbVpB3e0/kKCGy6QSgECl6nUAxCjJ7maXaeOWzQPpFLXtMX41l2TU76ze2F/Qxw8irvswFfx0vTORXsTw==}
+    engines: {node: '>=12.0.0'}
 
   '@ioredis/commands@1.3.0':
     resolution: {integrity: sha512-M/T6Zewn7sDaBQEqIZ8Rb+i9y8qfGmq+5SDFSf9sA2lUZTmdDLVdOiQaeDp+Q4wElZ9HG1GAX5KhDaidp6LQsQ==}
@@ -477,13 +484,9 @@ packages:
     resolution: {integrity: sha512-rcX58I7nqpu4mbKztFeOAObbomBbHU2oIb/d3tJfF3dizGSApqtSwYJigGCooHdnMyQBIw8BrWyK96w3YXgr6A==}
     engines: {node: '>=14'}
 
-  googleapis-common@8.0.0:
-    resolution: {integrity: sha512-66if47It7y+Sab3HMkwEXx1kCq9qUC9px8ZXoj1CMrmLmUw81GpbnsNlXnlyZyGbGPGcj+tDD9XsZ23m7GLaJQ==}
+  googleapis-common@8.0.2-rc.0:
+    resolution: {integrity: sha512-JTcxRvmFa9Ec1uyfMEimEMeeKq1sHNZX3vn2qmoUMtnvixXXvcqTcbDZvEZXkEWpGlPlOf4joyep6/qs0BrLyg==}
     engines: {node: '>=18.0.0'}
-
-  googleapis@157.0.0:
-    resolution: {integrity: sha512-0q6V93amJANRu1BRkeG6eftrAxweM7ZLbgRshmRg2zLSPpPLaRiDFCckHpEOFspXGglfw8l+hZql7NgWPwAwfQ==}
-    engines: {node: '>=18'}
 
   gopd@1.2.0:
     resolution: {integrity: sha512-ZUKRh6/kUFoAiTAtTYPZJ3hw9wNxx+BIBOijnlG9PnrJsCcSjs1wyyD6vJpaYtgnzDrKYRSqf3OO6Rfa93xsRg==}
@@ -964,6 +967,12 @@ snapshots:
       lodash.isundefined: 3.0.1
       lodash.uniq: 4.5.0
 
+  '@googleapis/sheets@11.1.0':
+    dependencies:
+      googleapis-common: 8.0.2-rc.0
+    transitivePeerDependencies:
+      - supports-color
+
   '@ioredis/commands@1.3.0': {}
 
   '@jridgewell/resolve-uri@3.1.2': {}
@@ -1413,20 +1422,13 @@ snapshots:
 
   google-logging-utils@1.1.1: {}
 
-  googleapis-common@8.0.0:
+  googleapis-common@8.0.2-rc.0:
     dependencies:
       extend: 3.0.2
       gaxios: 7.1.1
       google-auth-library: 10.2.1
       qs: 6.14.0
       url-template: 2.0.8
-    transitivePeerDependencies:
-      - supports-color
-
-  googleapis@157.0.0:
-    dependencies:
-      google-auth-library: 10.2.1
-      googleapis-common: 8.0.0
     transitivePeerDependencies:
       - supports-color
 
