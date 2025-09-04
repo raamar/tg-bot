@@ -100,7 +100,7 @@ export const funnelMessages: FunnelMessage[] = [
   },
   {
     id: 'reminder2',
-    circleUrl: 'DQACAgIAAxkDAAJCIGi42_WzxeeQB-98luDtH3LlqMfOAAJ4hgACNNvISW4JcKcAAexrxTYE',
+    circleUrl: 'DQACAgIAAxkDAAMLaLjiXfpVLXsc1BZdlg9eH72a5kQAAtiHAALteshJUjPl0jeTj1E2BA',
     delayMs: 1000 * 60 * 60 * 22, // 22 часа
     text: [
       '<b>Мой топовый ученик хвастается результатами прямо из клуба в Дубае 🦾</b>\n\n',
