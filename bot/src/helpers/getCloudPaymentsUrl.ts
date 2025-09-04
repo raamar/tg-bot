@@ -4,7 +4,7 @@ export const getCloudPaymentsUrl = async (orderId: string, userId: string, amoun
   const payload = {
     Amount: amount,
     Currency: 'RUB',
-    Description: 'ГАЙД: Как я заработала миллион на фото ног',
+    Description: 'Гайд: Миллион на ИИ аватаре',
     InvoiceId: orderId,
     AccountId: userId,
     JsonData: {
@@ -14,7 +14,7 @@ export const getCloudPaymentsUrl = async (orderId: string, userId: string, amoun
         customerReceipt: {
           items: [
             {
-              label: 'ГАЙД: Как я заработала миллион на фото ног',
+              label: 'Гайд: Миллион на ИИ аватаре',
               price: amount,
               quantity: 1,
               amount: amount,
