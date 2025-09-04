@@ -1,7 +1,7 @@
 import { Context, NarrowedContext } from 'telegraf'
 import { CallbackQuery, Update } from 'telegraf/typings/core/types/typegram'
 
-export type SendActionType = 'BUY_LINK' | 'SUBSCRIBE' | 'START' | 'CONTENTS' | 'START_FUNNEL' | 'DEFAULT'
+export type SendActionType = 'BUY_LINK' | 'SUBSCRIBE' | 'START' | 'CONTENTS' | 'START_FUNNEL' | 'DEFAULT' | 'LINK'
 export type AdminActionType = 'BROADCAST' | 'BROADCAST_FILE' | 'BROADCAST_MESSAGE' | 'BROADCAST_PHOTO'
 
 interface InlineButtonBase {
@@ -11,6 +11,7 @@ interface InlineButtonBase {
 
 export type InlineButton =
   | (InlineButtonBase & { action: 'BUY_LINK'; amount: number; url?: string })
+  | (InlineButtonBase & { action: 'LINK'; url?: string })
   | (InlineButtonBase & { action: 'START' })
   | (InlineButtonBase & { action: 'CONTENTS' })
   | (InlineButtonBase & { action: 'START_FUNNEL' })

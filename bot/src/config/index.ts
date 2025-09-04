@@ -6,7 +6,7 @@ export const happyEnd = {
   url: 'https://t.me/+vnnGEx4SWTw0ZTk6',
 }
 
-export const actionsMessages: Record<Exclude<SendActionType, 'BUY_LINK' | 'DEFAULT'>, ActionMessage> = {
+export const actionsMessages: Record<Exclude<SendActionType, 'BUY_LINK' | 'DEFAULT' | 'LINK'>, ActionMessage> = {
   START: {
     text: [
       '👋 Привет! Дай угадаю - ты и не думал, что когда то сможешь зарабатывать на Онлике? 😈\n\n',
@@ -71,7 +71,10 @@ export const actionsMessages: Record<Exclude<SendActionType, 'BUY_LINK' | 'DEFAU
   },
   SUBSCRIBE: {
     text: 'Прежде чем получить гайд - сначала подпишись на мой личный Telegram-канал, где я <b>БЕСПЛАТНО</b> делюсь секретами по заработку на ИИ-моделинге 🤖',
-    buttons: [{ text: '👉 Подписался 👈', action: 'START_FUNNEL' }],
+    buttons: [
+      { url: 'https://t.me/+MNYpYNPxYf8wZWNi', text: 'Подписаться на канал', action: 'LINK' },
+      { text: '👉 Подписался 👈', action: 'START_FUNNEL' },
+    ],
   },
   START_FUNNEL: {
     text: [

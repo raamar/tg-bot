@@ -67,7 +67,7 @@ export const actionHandlers: ActionHandlerMap = {
 
     const user = await prisma.user.findFirst({
       where: { telegramId },
-      select: { id: true },
+      select: { id: true, subscribed: true },
     })
 
     if (!user) {
@@ -75,9 +75,7 @@ export const actionHandlers: ActionHandlerMap = {
       return false
     }
 
-    const { status } = await ctx.telegram.getChatMember(String(process.env.TELEGRAM_CHATMEMEBER_CHECK), ctx.from.id)
-
-    if (['creator', 'administrator', 'member'].includes(status) === false) {
+    if (!user.subscribed) {
       await ctx.reply(default401Message)
       return false
     }

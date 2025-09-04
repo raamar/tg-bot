@@ -19,6 +19,7 @@ model User {
   funnelProgress FunnelProgress?
   payments       Payment[]
   paid           Boolean         @default(false)
+  subscribed     Boolean         @default(false)
 }
 
 model FunnelProgress {

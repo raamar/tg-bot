@@ -144,15 +144,7 @@ bot.on('message', (ctx, next) => {
 })
 
 bot.on('chat_join_request', async (ctx) => {
-  const user = await prisma.user.findFirst({ where: { telegramId: String(ctx.from.id) }, select: { paid: true } })
-
-  if (user?.paid) {
-    await ctx.approveChatJoinRequest(ctx.from.id)
-
-    return
-  }
-
-  await ctx.declineChatJoinRequest(ctx.from.id)
+  await prisma.user.update({ where: { telegramId: String(ctx.from.id) }, data: { subscribed: true } })
 })
 
 process.once('SIGINT', () => bot.stop('SIGINT'))
