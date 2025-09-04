@@ -23,9 +23,10 @@ const HEADERS = [
   'Cсылка для оплаты',
   'Дата оплаты',
   'Время оплаты',
+  'Согласие',
 ] as const
 
-type RowTuple = [string, string, string, string, string, string, string, string, string, string, string, string]
+type RowTuple = [string, string, string, string, string, string, string, string, string, string, string, string, string]
 
 const usersToRows = (users: ExportUser[]): RowTuple[] =>
   users.map((u) => {
@@ -45,6 +46,7 @@ const usersToRows = (users: ExportUser[]): RowTuple[] =>
       paid?.url ?? '',
       paidParts[0],
       paidParts[1],
+      u.agreed ? 'Да' : 'Нет',
     ]
   })
 

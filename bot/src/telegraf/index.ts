@@ -1,7 +1,7 @@
 import { FmtString } from 'telegraf/format'
 import { Worker, Job } from 'bullmq'
 import { Update } from 'telegraf/typings/core/types/typegram'
-import { Input, Telegraf } from 'telegraf'
+import { Telegraf } from 'telegraf'
 import { redis } from '../redis'
 import { prisma } from '../prisma'
 import { actionsMessages } from '../config'
@@ -10,7 +10,6 @@ import { inline_keyboard_generate } from '../helpers/inline_keyboard_generate'
 import telegrafThrottler from 'telegraf-throttler'
 import { adminActions } from './adminActions'
 import { DocumentContext, PhotoContext, TextContext } from '../types/admin'
-import axios from 'axios'
 
 if (process.env.TELEGRAM_TOKEN === undefined) {
   throw new Error('TELEGRAM_TOKEN is not defined')

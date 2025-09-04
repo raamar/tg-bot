@@ -31,6 +31,7 @@ export const generateUserExcelBuffer = async (users: ExportUser[]): Promise<Buff
     { header: 'Cсылка для оплаты', key: 'url', width: 30 },
     { header: 'Дата оплаты', key: 'paidDate', width: 15 },
     { header: 'Время оплаты', key: 'paidTime', width: 15 },
+    { header: 'Согласие', key: 'agreed', width: 15 },
   ]
 
   for (const user of users) {
@@ -49,6 +50,7 @@ export const generateUserExcelBuffer = async (users: ExportUser[]): Promise<Buff
       url: paidPayment?.url || '',
       paidDate: paidPayment?.paidAt ? formatDate(paidPayment.paidAt).split(' ')[0] : '',
       paidTime: paidPayment?.paidAt ? formatDate(paidPayment.paidAt).split(' ')[1] : '',
+      agreed: user.agreed ? 'Да' : 'Нет',
     })
   }
 

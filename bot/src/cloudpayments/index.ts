@@ -4,8 +4,10 @@ import { CloudpaymentsQueuePayload } from '../types/funnel'
 import { prisma } from '../prisma'
 import { funnelQueue } from '../funnel'
 import { bot } from '../telegraf'
-import { happyEnd } from '../config'
 import { getAdmins } from '../helpers/getAdmins'
+import { FmtString } from 'telegraf/format'
+import { inline_keyboard_generate } from '../helpers/inline_keyboard_generate'
+import { actionsMessages } from '../config'
 
 export const cloudpaymentsQueue = new Queue('cloudpayments', {
   connection: redis,
@@ -53,11 +55,13 @@ new Worker<CloudpaymentsQueuePayload>(
         },
       })
 
+      const { text, buttons } = actionsMessages.AGREE
+
       const results = await Promise.allSettled([
-        bot.telegram.sendMessage(payments.user.telegramId, happyEnd.text, {
+        bot.telegram.sendMessage(payments.user.telegramId, new FmtString(text), {
           parse_mode: 'HTML',
           reply_markup: {
-            inline_keyboard: [[{ text: happyEnd.button_text, url: happyEnd.url }]],
+            inline_keyboard: inline_keyboard_generate(buttons),
           },
         }),
         ...getAdmins().map((adminId) =>

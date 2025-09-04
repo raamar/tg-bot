@@ -18,8 +18,9 @@ model User {
   updatedAt      DateTime        @updatedAt
   funnelProgress FunnelProgress?
   payments       Payment[]
-  paid           Boolean         @default(false)
+  paid           Boolean         @default(false) 
   subscribed     Boolean         @default(false)
+  agreed         Boolean         @default(false)
 }
 
 model FunnelProgress {

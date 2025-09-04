@@ -4,6 +4,7 @@ import {
   actionsMessages,
   default401Message,
   default403Message,
+  default500Message,
   defaultExpirationMessage,
   funnelMessages,
 } from '../config'
@@ -61,7 +62,6 @@ export const actionHandlers: ActionHandlerMap = {
 
     return true
   },
-
   START_FUNNEL: async (ctx) => {
     const telegramId = String(ctx.from.id)
 
@@ -145,6 +145,32 @@ export const actionHandlers: ActionHandlerMap = {
       return false
     }
 
+    return true
+  },
+  HAPPY_END: async (ctx) => {
+    const telegramId = String(ctx.from.id)
+
+    const user = await prisma.user.update({
+      where: { telegramId },
+      data: { agreed: true },
+      select: { id: true, paid: true },
+    })
+
+    if (!user) {
+      await ctx.reply(default403Message)
+      return false
+    }
+
+    if (!user.paid) {
+      await ctx.reply(default500Message)
+      return false
+    }
+
+    const defaultResult = await actionHandlers.DEFAULT(ctx)
+
+    if (!defaultResult) {
+      return false
+    }
     return true
   },
 }
