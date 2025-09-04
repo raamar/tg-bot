@@ -108,7 +108,7 @@ export const actionsMessages: Record<Exclude<SendActionType, 'BUY_LINK' | 'DEFAU
 
       '❌ Если вас это не устраивает – запросите возврат, написав сюда: @only_neuro_chat (доступ к гайду будет закрыт).',
     ].join('\n'),
-    buttons: [{ text: 'Принять условия', action: 'HAPPY_END' }],
+    buttons: [{ text: 'Я ознакомился', action: 'HAPPY_END' }],
   },
 }
 
