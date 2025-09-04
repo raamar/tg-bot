@@ -2,8 +2,8 @@ import { FmtString } from 'telegraf/format'
 import { ActionHandlerMap } from '../types/funnel'
 import {
   actionsMessages,
+  default401Message,
   default403Message,
-  default500Message,
   defaultExpirationMessage,
   funnelMessages,
 } from '../config'
@@ -41,10 +41,14 @@ export const actionHandlers: ActionHandlerMap = {
 
     await redis.set(key, '1', 'EX', Number(process.env.TELEGRAM_STEPS_EXPIRE))
 
-    const { text, buttons, photoUrl } = actionsMessages[callback_data]
+    const { text, buttons, photoUrl, circleUrl } = actionsMessages[callback_data]
 
     if (photoUrl) {
       await ctx.replyWithPhoto(photoUrl)
+    }
+
+    if (circleUrl) {
+      await ctx.replyWithVideoNote(circleUrl)
     }
 
     await insertPaymentUrlToButtons(buttons, user.id)
@@ -59,12 +63,6 @@ export const actionHandlers: ActionHandlerMap = {
   },
 
   START_FUNNEL: async (ctx) => {
-    const defaultResult = await actionHandlers.DEFAULT(ctx)
-
-    if (!defaultResult) {
-      return false
-    }
-
     const telegramId = String(ctx.from.id)
 
     const user = await prisma.user.findFirst({
@@ -74,6 +72,19 @@ export const actionHandlers: ActionHandlerMap = {
 
     if (!user) {
       await ctx.reply(default403Message)
+      return false
+    }
+
+    const { status } = await ctx.telegram.getChatMember(String(process.env.TELEGRAM_CHATMEMEBER_CHECK), ctx.from.id)
+
+    if (['creator', 'administrator', 'member'].includes(status) === false) {
+      await ctx.reply(default401Message)
+      return false
+    }
+
+    const defaultResult = await actionHandlers.DEFAULT(ctx)
+
+    if (!defaultResult) {
       return false
     }
 
@@ -130,51 +141,11 @@ export const actionHandlers: ActionHandlerMap = {
       return false
     }
 
-    const stageIndex = funnelMessages.findIndex((stage) => stage.id === user.funnelProgress!.stageId)
-    const stage = funnelMessages[stageIndex]
-    const nextStageIndex = stageIndex + 1
-    const nextStage = funnelMessages[nextStageIndex]
-    let nextJobId = null
-
-    if (!user.funnelProgress) {
-      console.warn(`User ${user.id} has no funnel progress`)
-
-      await ctx.reply(default500Message)
-      return false
-    }
-
     const defaultResult = await actionHandlers.DEFAULT(ctx)
 
     if (!defaultResult) {
       return false
     }
-
-    if (nextStage) {
-      const nextJob = await funnelQueue.add(
-        `funnel-${user.id}-${nextStage.id}`,
-        {
-          userId: user.id,
-          stageIndex: nextStageIndex,
-        },
-        {
-          delay: process.env.NODE_ENV === 'development' ? 10000 : nextStage.delayMs,
-          jobId: `funnel-${user.id}-${nextStage.id}`,
-        }
-      )
-
-      nextJobId = nextJob.id
-    }
-
-    await prisma.funnelProgress.update({
-      where: { userId: user.id },
-      data: {
-        stageId: stage.id,
-        nextJobId,
-        stageIndex: stageIndex + 1,
-        nextRunAt: nextStage ? new Date(Date.now() + nextStage.delayMs) : null,
-        completed: !nextStage,
-      },
-    })
 
     return true
   },

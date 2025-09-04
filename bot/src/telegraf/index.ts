@@ -1,7 +1,7 @@
 import { FmtString } from 'telegraf/format'
 import { Worker, Job } from 'bullmq'
 import { Update } from 'telegraf/typings/core/types/typegram'
-import { Telegraf } from 'telegraf'
+import { Input, Telegraf } from 'telegraf'
 import { redis } from '../redis'
 import { prisma } from '../prisma'
 import { actionsMessages } from '../config'
@@ -10,6 +10,7 @@ import { inline_keyboard_generate } from '../helpers/inline_keyboard_generate'
 import telegrafThrottler from 'telegraf-throttler'
 import { adminActions } from './adminActions'
 import { DocumentContext, PhotoContext, TextContext } from '../types/admin'
+import axios from 'axios'
 
 if (process.env.TELEGRAM_TOKEN === undefined) {
   throw new Error('TELEGRAM_TOKEN is not defined')
@@ -89,7 +90,7 @@ for (const [action] of Object.entries(actionsMessages)) {
 bot.start(async (ctx) => {
   const { id, username, first_name, last_name } = ctx.from
   const ref = ctx.message.text?.split(' ')[1] || null
-  const { text, buttons, photoUrl } = actionsMessages.START
+  const { text, buttons, photoUrl, circleUrl } = actionsMessages.START
 
   const user = await prisma.user.upsert({
     where: { telegramId: String(id) },
@@ -111,6 +112,10 @@ bot.start(async (ctx) => {
 
   if (photoUrl) {
     await ctx.replyWithPhoto(photoUrl)
+  }
+
+  if (circleUrl) {
+    await ctx.replyWithVideoNote(circleUrl)
   }
 
   await ctx.reply(new FmtString(text), {

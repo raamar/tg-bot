@@ -23,6 +23,7 @@ export type FunnelMessage = {
   buttons: InlineButton[]
   photoUrl?: string
   stop?: boolean
+  circleUrl?: string
 }
 
 export type ActionMessage = Omit<FunnelMessage, 'delayMs' | 'id'>

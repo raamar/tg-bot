@@ -41,6 +41,10 @@ const funnelWorker = new Worker<FunnelQueuePayload>(
       throw new Error(`FUNNEL WORKER: Telegram User not found for ID ${userId}`)
     }
 
+    if (stage.circleUrl) {
+      await bot.telegram.sendVideoNote(user.telegramId, stage.circleUrl)
+    }
+
     if (stage.photoUrl) {
       await bot.telegram.sendPhoto(user.telegramId, stage.photoUrl)
     }
