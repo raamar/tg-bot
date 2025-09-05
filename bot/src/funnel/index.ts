@@ -70,7 +70,7 @@ const funnelWorker = new Worker<FunnelQueuePayload>(
         },
 
         {
-          delay: process.env.NODE_ENV === 'development' ? 10000 : nextStage.delayMs,
+          delay: process.env.NODE_ENV === 'development' ? 60000 : nextStage.delayMs,
           jobId: `funnel-${userId}-${nextStage.id}`,
         }
       )

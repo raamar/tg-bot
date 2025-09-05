@@ -93,7 +93,7 @@ export const actionHandlers: ActionHandlerMap = {
         stageIndex: 0,
       },
       {
-        delay: process.env.NODE_ENV === 'development' ? 10000 : funnelMessages[0].delayMs,
+        delay: process.env.NODE_ENV === 'development' ? 60000 : funnelMessages[0].delayMs,
         jobId: `funnel-${user.id}-${funnelMessages[0].id}`,
       }
     )
