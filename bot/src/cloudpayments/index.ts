@@ -65,7 +65,7 @@ new Worker<CloudpaymentsQueuePayload>(
           },
         }),
         ...getAdmins().map((adminId) =>
-          bot.telegram.sendMessage(adminId, `🦶 Купили гайд!\n` + `💰 Сумма: ${payments.amount.toFixed(2)} ₽`, {
+          bot.telegram.sendMessage(adminId, `🦾 Купили гайд!\n` + `💰 Сумма: ${payments.amount.toFixed(2)} ₽`, {
             parse_mode: 'HTML',
           })
         ),
