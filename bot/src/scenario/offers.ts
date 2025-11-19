@@ -6,7 +6,8 @@ export const offersConfig: Record<OfferKey, OfferTemplate> = {
     title: 'Гайд + чат: Как я заработал миллион на генерации ИИ-девушек',
     currency: 'RUB',
     lifetimeMinutes: 0,
-    phases: [{ startAfterMinutes: 0, price: 9990 }],
+    // phases: [{ startAfterMinutes: 0, price: 9990 }],
+    phases: [{ startAfterMinutes: 0, price: 100 }],
   },
   main_discount_50: {
     id: 'main_discount_50',
@@ -20,6 +21,7 @@ export const offersConfig: Record<OfferKey, OfferTemplate> = {
     title: 'Финальное предложение по гайду',
     currency: 'RUB',
     lifetimeMinutes: 60 * 24,
-    phases: [{ startAfterMinutes: 0, price: 5000 }],
+    // phases: [{ startAfterMinutes: 0, price: 5000 }],
+    phases: [{ startAfterMinutes: 0, price: 150 }],
   },
 }
