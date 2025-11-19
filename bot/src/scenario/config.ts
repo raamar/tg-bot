@@ -52,12 +52,12 @@ export const scenario: ScenarioConfig = {
           {
             kind: 'url',
             text: ' Канал 1 ',
-            url: 'https://t.me/your_channel_1', // подставишь реальный
+            url: 'https://t.me/+MNYpYNPxYf8wZWNi',
           },
           {
             kind: 'url',
             text: ' Канал 2 ',
-            url: 'https://t.me/your_channel_2', // подставишь реальный
+            url: 'https://t.me/+zCh0iQC5mnEwN2Ri',
           },
         ],
         [

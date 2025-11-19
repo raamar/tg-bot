@@ -20,6 +20,8 @@ import { offersConfig } from '../scenario/offers'
 import { adminActions } from './adminActions'
 import { DocumentContext, PhotoContext, TextContext } from '../types/admin'
 import { ensureWataPaymentLinkForOffer } from '../payments/ensureWataOfferPayment'
+import { actionsMessages } from '../config'
+import { inline_keyboard_generate } from '../helpers/inline_keyboard_generate'
 
 if (process.env.TELEGRAM_TOKEN === undefined) {
   throw new Error('TELEGRAM_TOKEN is not defined')
@@ -388,6 +390,43 @@ bot.action(
   })
 )
 
+bot.action(
+  'HAPPY_END',
+  withErrorHandling(async (ctx) => {
+    const telegramId = String(ctx.from.id)
+
+    const user = await prisma.user.findUnique({
+      where: { telegramId },
+      select: { id: true, agreed: true },
+    })
+
+    if (!user) {
+      await ctx.answerCbQuery().catch(() => {})
+      await ctx.reply('👉 Для начала введите /start')
+      return
+    }
+
+    // Помечаем согласие с пользовательским соглашением
+    if (!user.agreed) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { agreed: true },
+      })
+    }
+
+    const { text, buttons } = actionsMessages.HAPPY_END
+
+    await ctx.answerCbQuery().catch(() => {})
+
+    await ctx.reply(new FmtString(text), {
+      parse_mode: 'HTML',
+      reply_markup: {
+        inline_keyboard: inline_keyboard_generate(buttons),
+      },
+    })
+  })
+)
+
 // ================== ADMIN HANDLERS ==================
 
 for (const [pattern, handler] of Object.entries(adminActions.callbacks)) {
@@ -397,6 +436,7 @@ for (const [pattern, handler] of Object.entries(adminActions.callbacks)) {
 bot.command('broadcast', adminActions.commands.broadcast)
 bot.command('export', adminActions.commands.export)
 bot.command('stop', adminActions.commands.stop)
+bot.command('paid', adminActions.commands.paid)
 
 // обработка обычных сообщений для админских штук
 bot.on('message', (ctx, next) => {

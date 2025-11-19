@@ -12,6 +12,7 @@ import { prisma } from '../prisma'
 import { generateUserExcelBuffer } from '../helpers/exportToExcel'
 import { reminderQueue } from '../reminders/scheduler'
 import { ReminderStatus } from '@prisma/client'
+import { confirmPaymentAndNotify } from '../payments/confirmPayment'
 
 const getSession = async (ctx: { from?: { id: number } }): Promise<BroadcastSession | null> => {
   if (!ctx.from) return null
@@ -194,6 +195,67 @@ const adminActions: AdminActionHandlerMap = {
         source: buffer,
         filename: `users_export_${new Date().toISOString().slice(0, 10)}.xlsx`,
       })
+    },
+
+    /**
+     * Ручное подтверждение оплаты:
+     * /paid <telegramId> <сумма>
+     *
+     * Примеры:
+     *   /paid 123456789 4990
+     *   /paid 123456789 4990.50
+     */
+    paid: async (ctx) => {
+      if (!isAdmin(ctx.from?.id)) {
+        await ctx.reply('У вас нет прав для выполнения этой команды')
+        return
+      }
+
+      const msg: any = ctx.message
+      const text: string | undefined = msg?.text
+      if (!text) {
+        await ctx.reply('Некорректная команда. Использование: /paid <telegramId> <сумма>')
+        return
+      }
+
+      const parts = text.trim().split(/\s+/)
+      // parts[0] = "/paid"
+      if (parts.length < 3) {
+        await ctx.reply('Использование: /paid <telegramId> <сумма>\nНапример: /paid 123456789 4990')
+        return
+      }
+
+      const telegramId = parts[1]
+      const amountRaw = parts.slice(2).join('') // разрешим писать сумму без лишних пробелов
+
+      if (!telegramId) {
+        await ctx.reply('Не указан telegramId. Использование: /paid <telegramId> <сумма>')
+        return
+      }
+
+      const normalized = amountRaw.replace(',', '.')
+      const amount = Number(normalized)
+
+      if (!Number.isFinite(amount) || amount <= 0) {
+        await ctx.reply(
+          'Сумма должна быть положительным числом.\nПримеры:\n' + '/paid 123456789 4990\n' + '/paid 123456789 4990.50'
+        )
+        return
+      }
+
+      try {
+        await confirmPaymentAndNotify(telegramId, amount)
+        await ctx.reply(
+          `✅ Платёж подтверждён.\n` +
+            `telegramId: ${telegramId}\n` +
+            `Сумма: ${amount.toFixed(2)} ₽\n` +
+            `Все напоминания и офферы для пользователя отключены.`
+        )
+      } catch (err: any) {
+        console.error('Ошибка при ручном подтверждении оплаты через /paid:', err)
+        const message = err instanceof Error ? err.message : String(err)
+        await ctx.reply(`❌ Ошибка при подтверждении оплаты: ${message}`)
+      }
     },
   },
 

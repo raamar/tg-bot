@@ -77,7 +77,13 @@ export const actionsMessages: Record<Exclude<SendActionType, 'BUY_LINK' | 'DEFAU
   },
   HAPPY_END: {
     text: ['Спасибо за доверие! Получи доступ к гайду по ссылке ниже.\n\n'].join(''),
-    buttons: [{ action: 'LINK', text: '👉 Получить гайд 👈', url: 'https://t.me/+vnnGEx4SWTw0ZTk6' }],
+    buttons: [
+      {
+        action: 'LINK',
+        text: '👉 Получить гайд 👈',
+        url: 'https://t.me/+-_lFHX1fFcliNDMy',
+      },
+    ],
   },
   AGREE: {
     text: [
