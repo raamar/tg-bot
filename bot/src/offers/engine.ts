@@ -23,7 +23,7 @@ function computeExpiresAt(now: Date, lifetimeMinutes: number | undefined | null)
   }
 
   const hours = lifetimeMinutes / 60
-  const devMs = Math.max(10_000, hours * 1_000) // минимум 10 секунд
+  const devMs = Math.max(30_000, hours * 1_000) // минимум 30 секунд
   return new Date(now.getTime() + devMs)
 }
 

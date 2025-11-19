@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import telegram from './telegram'
-import cloudpayments from './cloudpayments'
+import wata from './wata'
 const router = Router()
 
 router.get('/ping', (req, res) => {
@@ -8,7 +8,7 @@ router.get('/ping', (req, res) => {
 })
 
 router.use('/telegram', telegram)
-router.use('/cloudpayments', cloudpayments)
+router.use('/wata', wata)
 
 router.use((req, res) => {
   res.status(404).json({ error: 'Not Found' })
