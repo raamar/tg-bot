@@ -358,7 +358,7 @@ export const scenario: ScenarioConfig = {
       ].join(''),
       defaultDelayMinutes: 24 * 60,
       media: [
-        { fileIdOrUrl: 'BQACAgIAAxkBAAJKE2kdQnL4BMCYc9Wa-gnAKFnl9MF-AAKJgAACNOboSJ2oG3u2udk4NgQ', type: 'video' },
+        { fileIdOrUrl: 'BAACAgIAAxkBAAJLdWkdTjzwegwBlO4Dwq3BYebLvHC2AALYgAACNOboSA_J-DAPzMMWNgQ', type: 'video' },
       ],
       buttons: [
         [
