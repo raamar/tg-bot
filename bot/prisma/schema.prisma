@@ -1,3 +1,5 @@
+// schema.prisma
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -8,47 +10,177 @@ datasource db {
 }
 
 model User {
-  id             String          @id @default(uuid())
-  telegramId     String          @unique
-  username       String?
-  firstName      String?
-  lastName       String?
-  refSource      String?
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  funnelProgress FunnelProgress?
-  payments       Payment[]
-  paid           Boolean?         @default(false) 
-  subscribed     Boolean?         @default(false)
-  agreed         Boolean?         @default(false)
+  id         String  @id @default(uuid())
+  telegramId String  @unique
+  username   String?
+  firstName  String?
+  lastName   String?
+  refSource  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Текущий шаг сценария (ID из TS-конфига)
+  currentStepId   String?
+  /// Ключ сценария (если будет несколько сценариев, сейчас можно оставить null/один)
+  currentScenario String?
+
+  paid       Boolean @default(false)
+  subscribed Boolean @default(false)
+  agreed     Boolean @default(false)
+
+  payments              Payment[]
+  offerInstances        OfferInstance[]
+  reminderSubscriptions ReminderSubscription[]
+  stepVisits            StepVisit[]
+
+  @@index([telegramId])
 }
 
-model FunnelProgress {
-  id         String    @id @default(uuid())
-  user       User      @relation(fields: [userId], references: [id])
-  userId     String    @unique
-  stageId    String
-  stageIndex Int
-  startedAt  DateTime  @default(now())
-  nextRunAt  DateTime?
-  nextJobId  String?
-  completed  Boolean   @default(false)
-}
-
+/// Платёж CloudPayments (или любой другой процессинг)
 model Payment {
-  id        String        @id @default(uuid())
-  user      User          @relation(fields: [userId], references: [id])
-  userId    String
-  url       String?
-  amount    Decimal
-  status    PaymentStatus
-  createdAt DateTime      @default(now())
+  /// Можно продолжать использовать invoiceId CloudPayments как id
+  id     String @id
+  user   User   @relation(fields: [userId], references: [id])
+  userId String
+
+  /// Связь с конкретным инстансом оффера (если платёж был по офферу)
+  offerInstance   OfferInstance? @relation(fields: [offerInstanceId], references: [id])
+  offerInstanceId String?
+
+  amount   Decimal @db.Decimal(10, 2)
+  currency String  @default("RUB")
+
+  url    String? // ссылка на оплату / invoice url
+  status PaymentStatus
+
+  createdAt DateTime  @default(now())
   paidAt    DateTime?
+
+  @@index([userId])
+  @@index([offerInstanceId])
+  @@index([status])
+}
+
+/// Персональный оффер для пользователя,
+/// который создаётся при клике по кнопке "купить".
+model OfferInstance {
+  id     String @id @default(uuid())
+  user   User   @relation(fields: [userId], references: [id])
+  userId String
+
+  /// Ключ шаблона оффера из конфига (main_full_price / main_discount_50 / ...)
+  offerKey OfferKey
+
+  status OfferStatus @default(ACTIVE)
+
+  createdAt  DateTime  @default(now())
+  expiresAt  DateTime?
+  finishedAt DateTime? // момент, когда оффер завершился (оплачен/истёк/отменён)
+
+  /// Снапшот условий на момент создания – чтобы не сломать аналитику,
+  /// если конфиг офферов изменится.
+  initialPrice Decimal @db.Decimal(10, 2)
+  currency     String  @default("RUB")
+
+  /// Сообщение с последним "окном предложения"
+  lastMessageChatId    String?
+  lastMessageId        Int?
+  lastMessageBullJobId String?
+
+  /// Обратная сторона 1-к-1 связи с Payment (без fields/references!)
+  payment Payment[]
+
+  @@index([userId])
+  @@index([offerKey])
+  @@index([status])
+}
+
+/// Подписка на напоминание: "отправить юзеру шаг X в момент scheduledAt".
+/// Именно эти записи мы будем гасить при оплате (и снимать BullMQ job'ы).
+model ReminderSubscription {
+  id     String @id @default(uuid())
+  user   User   @relation(fields: [userId], references: [id])
+  userId String
+
+  /// ID шага из конфигурации (StepId в TS)
+  stepId String
+
+  /// Ключ сценария (если будет несколько сценариев)
+  scenarioKey String?
+
+  status ReminderStatus @default(PENDING)
+
+  /// Когда должно быть отправлено напоминание
+  scheduledAt DateTime
+
+  /// Фактическое время отправки (если статус SENT)
+  processedAt DateTime?
+  /// Время отмены (если статус CANCELED)
+  canceledAt  DateTime?
+  /// Время, когда решили не отправлять (например, условие notPaid не выполнено)
+  skippedAt   DateTime?
+
+  /// ID job-а в очереди BullMQ, чтобы его можно было отменить
+  bullJobId String?
+
+  @@index([userId])
+  @@index([status])
+  @@index([scheduledAt])
+}
+
+/// История переходов по шагам (для аналитики, A/B, ретраев и т.п.)
+model StepVisit {
+  id     String @id @default(uuid())
+  user   User   @relation(fields: [userId], references: [id])
+  userId String
+
+  /// ID шага из конфига
+  stepId String
+
+  /// Как юзер сюда попал: click (по кнопке), reminder (напоминание),
+  /// system (системное действие CHECK_SUBSCRIPTION и т.п.)
+  source StepVisitSource @default(CLICK)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, stepId])
+  @@index([createdAt])
 }
 
 enum PaymentStatus {
-  NONE
   PENDING
   PAID
   FAILED
+  CANCELED
+}
+
+/// Статус оффера для пользователя
+enum OfferStatus {
+  ACTIVE
+  EXPIRED
+  PAID
+  CANCELED
+}
+
+/// Статус подписки на напоминание
+enum ReminderStatus {
+  PENDING // ждём отправки
+  SENT // отправлено
+  SKIPPED // не отправляли (условие не выполнилось, юзер оплатил и т.п.)
+  CANCELED // явно отменили (например, по оплате)
+}
+
+/// Откуда случился переход на шаг
+enum StepVisitSource {
+  CLICK
+  REMINDER
+  SYSTEM
+}
+
+/// Ключи офферов из TS-конфига
+enum OfferKey {
+  main_full_price
+  main_discount_50
+  main_last_chance
 }

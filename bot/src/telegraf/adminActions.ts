@@ -1,4 +1,5 @@
-// src/actions/admin.ts
+// bot/src/telegraf/adminActions.ts
+
 import { Markup } from 'telegraf'
 import { redis } from '../redis'
 import { AdminActionHandlerMap, BroadcastSession, CallbackContext, PhotoContext, TextContext } from '../types/admin'
@@ -9,8 +10,8 @@ import { restoreHtmlFromEntities } from '../helpers/restoreHtmlFromEntities'
 import { isAdmin } from '../helpers/isAdmin'
 import { prisma } from '../prisma'
 import { generateUserExcelBuffer } from '../helpers/exportToExcel'
-import { funnelQueue } from '../funnel'
-import { funnelMessages } from '../config'
+import { reminderQueue } from '../reminders/scheduler'
+import { ReminderStatus } from '@prisma/client'
 
 const getSession = async (ctx: { from?: { id: number } }): Promise<BroadcastSession | null> => {
   if (!ctx.from) return null
@@ -93,59 +94,78 @@ const adminActions: AdminActionHandlerMap = {
     },
 
     stop: async (ctx) => {
-      const telegramId = String(ctx?.from?.id)
-
-      const user = await prisma.user.update({
-        where: { telegramId },
-        select: { id: true },
-        data: {
-          funnelProgress: {
-            update: {
-              nextJobId: null,
-              nextRunAt: null,
-            },
-          },
-        },
-      })
-
-      if (!user) {
+      const telegramId = String(ctx?.from?.id ?? '')
+      if (!telegramId) {
+        await ctx.reply('Не удалось определить пользователя')
         return
       }
 
-      const result = await Promise.allSettled(
-        funnelMessages.map(async ({ id: stageId }) => {
-          try {
-            const job = await funnelQueue.getJob(`funnel-${user.id}-${stageId}`)
-            if (job) {
-              return await job.remove()
-            }
+      // Находим пользователя
+      const user = await prisma.user.findUnique({
+        where: { telegramId },
+        select: { id: true },
+      })
 
-            return Promise.reject()
+      if (!user) {
+        await ctx.reply('Вы не участвуете в рассылке')
+        return
+      }
+
+      // Находим все ожидающие напоминания
+      const pendingReminders = await prisma.reminderSubscription.findMany({
+        where: {
+          userId: user.id,
+          status: ReminderStatus.PENDING,
+        },
+      })
+
+      const now = new Date()
+
+      const results = await Promise.allSettled(
+        pendingReminders.map(async (reminder) => {
+          try {
+            // Помечаем как отменённый
+            await prisma.reminderSubscription.update({
+              where: { id: reminder.id },
+              data: {
+                status: ReminderStatus.CANCELED,
+                canceledAt: now,
+              },
+            })
+
+            // Если есть привязанный BullMQ job — снимаем его
+            if (reminder.bullJobId) {
+              const job = await reminderQueue.getJob(reminder.bullJobId)
+              if (job) {
+                await job.remove()
+              }
+            }
           } catch (error) {
-            let message = error
+            let message: any = error
             if (error instanceof Error) {
               message = error.message
             }
-
-            console.error('ОШИБКА ПРИ /stop:', message)
-
-            return Promise.reject()
+            console.error('ОШИБКА ПРИ /stop (reminder cancel):', message)
+            return Promise.reject(error)
           }
         })
       )
 
+      // Чистим возможные ключи шагов/действий в redis (если ещё используются)
       const actionKeyPattern = `user:${telegramId}:action:*`
       const actionKeys = await redis.keys(actionKeyPattern)
       if (actionKeys.length > 0) {
         await redis.del(...actionKeys)
       }
 
-      if (result.filter((item) => item.status === 'fulfilled').length > 0) {
-        ctx.reply('Вы остановили рассылку.')
+      const hasCancelled = results.length > 0 && results.some((item) => item.status === 'fulfilled')
+
+      if (hasCancelled) {
+        await ctx.reply('Вы остановили рассылку.')
         return
       }
 
-      ctx.reply('Вы не учавствуете в рассылке')
+      await ctx.reply('Вы не участвуете в рассылке')
     },
 
     export: async (ctx) => {
@@ -158,15 +178,17 @@ const adminActions: AdminActionHandlerMap = {
 
       const users = await prisma.user.findMany({
         include: {
-          funnelProgress: true,
           payments: true,
+          offerInstances: true,
+          reminderSubscriptions: true,
+          stepVisits: true,
         },
         orderBy: {
           createdAt: 'asc',
         },
       })
 
-      const buffer = await generateUserExcelBuffer(users)
+      const buffer = await generateUserExcelBuffer(users as any)
 
       await ctx.replyWithDocument({
         source: buffer,
