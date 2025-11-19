@@ -1,15 +1,15 @@
 import { type sheets_v4 } from '@googleapis/sheets'
-
 import { prisma } from '../prisma'
-import { ExportUser } from '../helpers/exportToExcel'
 import { createSheetsClient } from './sheetsAuth'
 import { formatDate } from '../helpers/formatDate'
 
+// Настройки листа/записи
 const SHEET_NAME = 'Пользователи'
 const BATCH_ROWS_DEFAULT = 5000
 const MIN_BATCH = 1
 const VALUE_INPUT_OPTION: 'RAW' | 'USER_ENTERED' = 'RAW'
 
+// Шапка остаётся прежней
 const HEADERS = [
   'user_id',
   'username',
@@ -26,29 +26,66 @@ const HEADERS = [
   'Согласие',
 ] as const
 
-type RowTuple = [string, string, string, string, string, string, string, string, string, string, string, string, string]
+type RowTuple = [
+  string,
+  string,
+  string,
+  string,
+  string,
+  string, // дата/время регистрации
+  string, // ref
+  string, // ID Стадии
+  string, // Сумма
+  string, // Ссылка для оплаты
+  string,
+  string, // Дата/Время оплаты
+  string // Согласие
+]
+
+// ---- ПОМОЩНИКИ ДЛЯ ПЛАТЕЖЕЙ ----
+
+// Берём последний оплаченный платёж (по paidAt, потом createdAt)
+const pickLastPaid = <T extends { status: string; paidAt: Date | null; createdAt: Date }>(ps: T[]) =>
+  ps
+    .filter((p) => p.status === 'PAID')
+    .sort(
+      (a, b) => (b.paidAt?.getTime() ?? 0) - (a.paidAt?.getTime() ?? 0) || b.createdAt.getTime() - a.createdAt.getTime()
+    )[0]
+
+// Берём самый актуальный инвойс для оплаты — последний PENDING по createdAt
+const pickLatestPending = <T extends { status: string; createdAt: Date }>(ps: T[]) =>
+  ps.filter((p) => p.status === 'PENDING').sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0]
+
+// ---- ТРАНСФОРМ В СТРОКИ ----
+
+type ExportUser = Awaited<ReturnType<typeof getUsers>>[number]
 
 const usersToRows = (users: ExportUser[]): RowTuple[] =>
   users.map((u) => {
-    const paid = u.payments.find((p) => p.status === 'PAID')
-    const created = formatDate(u.createdAt).split(' ')
+    const paid = pickLastPaid(u.payments)
+    const pending = pickLatestPending(u.payments)
+
+    const createdParts = formatDate(u.createdAt).split(' ')
     const paidParts = paid?.paidAt ? formatDate(paid.paidAt).split(' ') : ['', '']
+
     return [
       String(u.telegramId ?? ''),
       u.username ?? '',
       u.firstName ?? '',
       u.lastName ?? '',
-      created[0] ?? '',
-      created[1] ?? '',
+      createdParts[0] ?? '',
+      createdParts[1] ?? '',
       u.refSource ?? '',
-      String(u.funnelProgress?.stageId ?? ''),
-      paid?.amount != null ? String(paid.amount) : '',
-      paid?.url ?? '',
+      String(u.currentStepId ?? ''), // было funnelProgress.stageId
+      paid?.amount != null ? String(paid.amount) : '', // сумма последнего успешного платежа
+      pending?.url ?? '', // ссылка на актуальный инвойс (если есть)
       paidParts[0],
       paidParts[1],
       u.agreed ? 'Да' : 'Нет',
     ]
   })
+
+// ---- РЕТРАЙ С БЭКОФФОМ ----
 
 const getStatusCode = (e: unknown): number | undefined => {
   if (typeof e !== 'object' || e === null) return undefined
@@ -73,6 +110,8 @@ const backoff = async <T>(fn: () => Promise<T>, attempt = 0): Promise<T> => {
     throw e
   }
 }
+
+// ---- ЗАПИСЬ В GOOGLE SHEETS ----
 
 export const replaceSheetWithUsers = async (
   client: sheets_v4.Sheets,
@@ -140,15 +179,15 @@ export const replaceSheetWithUsers = async (
   }
 }
 
-const getUsers = async (): Promise<ExportUser[]> =>
+// ---- ДАННЫЕ И ЗАПУСК ----
+
+// Под новую схему нам нужны только payments; currentStepId берём из User
+const getUsers = async () =>
   prisma.user.findMany({
     include: {
-      funnelProgress: true,
-      payments: true,
+      payments: true, // Payment[]
     },
-    orderBy: {
-      createdAt: 'asc',
-    },
+    orderBy: { createdAt: 'asc' },
   })
 
 const parseMinutes = (v: string | undefined, d: number): number => {
@@ -160,6 +199,7 @@ const runOnce = async (): Promise<void> => {
   const sheets = await createSheetsClient()
   const spreadsheetId = process.env.GOOGLE_SHEET_ID || ''
   if (!spreadsheetId) throw new Error('GOOGLE_SHEET_ID is required')
+
   const users = await getUsers()
   await replaceSheetWithUsers(sheets, spreadsheetId, users)
 }
