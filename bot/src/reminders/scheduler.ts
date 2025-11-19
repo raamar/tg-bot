@@ -32,7 +32,7 @@ function toDelayMs(delayMinutes: number): number {
     return baseMs
   }
 
-  const devMs = delayMinutes
+  const devMs = delayMinutes * 3
   const final = Math.max(500, devMs) // минимум 0.5 секунды
 
   console.log(`[REMINDER] dev delay: original=${delayMinutes}min (${baseMs}ms) -> dev=${final}ms`)
