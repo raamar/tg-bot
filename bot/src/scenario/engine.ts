@@ -131,6 +131,9 @@ export async function enterStepForUser(userId: string, stepId: StepId, source: S
   await bot.telegram.sendMessage(user.telegramId, new FmtString(finalText), {
     parse_mode: 'HTML',
     reply_markup: keyboard,
+    link_preview_options: {
+      is_disabled: true,
+    },
   })
 
   return step
