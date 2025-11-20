@@ -22,6 +22,7 @@ import { DocumentContext, PhotoContext, TextContext } from '../types/admin'
 import { ensureWataPaymentLinkForOffer } from '../payments/ensureWataOfferPayment'
 import { actionsMessages } from '../config'
 import { inline_keyboard_generate } from '../helpers/inline_keyboard_generate'
+import { isUserSubscribedToAllChats } from '../helpers/isUserSubscribedToAllChats'
 
 if (process.env.TELEGRAM_TOKEN === undefined) {
   throw new Error('TELEGRAM_TOKEN is not defined')
@@ -270,9 +271,18 @@ bot.action(
         await ctx.answerCbQuery().catch(() => {})
 
         if (action === 'CHECK_SUBSCRIPTION') {
-          if (IS_PROD && !user.subscribed) {
+          const isSubscribedNow = await isUserSubscribedToAllChats(ctx.telegram, Number(user.telegramId))
+
+          if (IS_PROD && !isSubscribedNow) {
             await ctx.reply('🚫 Сначала подпишись на канал(ы), а потом нажимай «Подписался».')
             return
+          }
+
+          if (!user.subscribed) {
+            await prisma.user.update({
+              where: { id: user.id },
+              data: { subscribed: true },
+            })
           }
 
           const nextStepId = '1763357438352'
