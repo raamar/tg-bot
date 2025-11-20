@@ -15,7 +15,7 @@ const MOSCOW_TZ = 'Europe/Moscow'
 
 // dev-обёртка текста: префикс с мета-информацией
 function withDevMeta(stepId: StepId, text: string): string {
-  if (IS_PROD) return text
+  if (true) return text
 
   const now = new Date()
   const formatted = now.toLocaleString('ru-RU', {
@@ -113,7 +113,7 @@ export async function enterStepForUser(userId: string, stepId: StepId, source: S
   if (step.media && step.media.length > 0) {
     for (const media of step.media) {
       if (media.type === 'photo') {
-        await bot.telegram.sendPhoto(user.telegramId, media.fileIdOrUrl)
+        await bot.telegram.sendPhoto(user.telegramId, media.fileIdOrUrl, {})
       } else if (media.type === 'video_note') {
         await bot.telegram.sendVideoNote(user.telegramId, media.fileIdOrUrl)
       } else if (media.type === 'audio') {
