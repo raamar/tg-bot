@@ -7,7 +7,14 @@ import { bot } from '../telegraf'
 import { scenario } from './config'
 import { StepConfig, StepId, ButtonConfig, OfferKey } from './types'
 import { offersConfig } from './offers'
-import { InlineKeyboardButton, InlineKeyboardMarkup } from 'telegraf/types'
+import {
+  InlineKeyboardButton,
+  InlineKeyboardMarkup,
+  InputMediaAudio,
+  InputMediaDocument,
+  InputMediaPhoto,
+  InputMediaVideo,
+} from 'telegraf/types'
 import { ensureOfferInstanceStarted } from '../offers/engine'
 
 const IS_PROD = process.env.NODE_ENV === 'production'
@@ -109,24 +116,78 @@ export async function enterStepForUser(userId: string, stepId: StepId, source: S
     await ensureOfferInstanceStarted(user.id, step.offerKey)
   }
 
-  // Отправка медиаконтента шага
+  const keyboard = buildInlineKeyboard(step)
+  const finalText = withDevMeta(stepId, step.text)
+
   if (step.media && step.media.length > 0) {
-    for (const media of step.media) {
+    const album: (InputMediaPhoto | InputMediaVideo | InputMediaAudio | InputMediaDocument)[] = []
+
+    // сначала вынесем media, которые можно отправить группой
+    const groupable = step.media.filter((m: any) => ['photo', 'video', 'audio', 'document'].includes(m.type))
+
+    const videoNotes = step.media.filter((m: any) => m.type === 'video_note')
+
+    groupable.forEach((media: any, index: number) => {
+      const common: any =
+        index === 0
+          ? {
+              caption: finalText,
+              parse_mode: 'HTML',
+            }
+          : {}
+
       if (media.type === 'photo') {
-        await bot.telegram.sendPhoto(user.telegramId, media.fileIdOrUrl, {})
-      } else if (media.type === 'video_note') {
-        await bot.telegram.sendVideoNote(user.telegramId, media.fileIdOrUrl)
-      } else if (media.type === 'audio') {
-        await bot.telegram.sendAudio(user.telegramId, media.fileIdOrUrl)
+        album.push({
+          type: 'photo',
+          media: media.fileIdOrUrl,
+          ...common,
+        } as InputMediaPhoto)
       } else if (media.type === 'video') {
-        await bot.telegram.sendVideo(user.telegramId, media.fileIdOrUrl)
+        album.push({
+          type: 'video',
+          media: media.fileIdOrUrl,
+          ...common,
+        } as InputMediaVideo)
+      } else if (media.type === 'audio') {
+        album.push({
+          type: 'audio',
+          media: media.fileIdOrUrl,
+          ...common,
+        } as InputMediaAudio)
+      } else if (media.type === 'document') {
+        album.push({
+          type: 'document',
+          media: media.fileIdOrUrl,
+          ...common,
+        } as InputMediaDocument)
       }
+    })
+
+    // отправляем альбом, если есть что отправлять
+    if (album.length > 0) {
+      await bot.telegram.sendMediaGroup(user.telegramId, album as any)
     }
+
+    // отдельно отправляем video_note, т.к. они не входят в sendMediaGroup
+    for (const media of videoNotes) {
+      await bot.telegram.sendVideoNote(user.telegramId, media.fileIdOrUrl)
+    }
+
+    // если нужны кнопки – можно отправить отдельным сообщением БЕЗ текста/превью
+    if (keyboard && (keyboard as any).inline_keyboard?.length) {
+      await bot.telegram.sendMessage(user.telegramId, ' ', {
+        reply_markup: keyboard,
+        link_preview_options: {
+          is_disabled: true,
+        },
+      })
+    }
+
+    // на этом всё, отдельный текстовый месседж с finalText уже не нужен
+    return step
   }
 
-  const keyboard = buildInlineKeyboard(step)
-
-  const finalText = withDevMeta(stepId, step.text)
+  // ===== если медиа нет – старое поведение =====
 
   await bot.telegram.sendMessage(user.telegramId, new FmtString(finalText), {
     parse_mode: 'HTML',
