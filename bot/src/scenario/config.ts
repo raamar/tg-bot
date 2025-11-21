@@ -820,6 +820,7 @@ export const scenario: ScenarioConfig = {
           },
         ],
       ],
+      defaultDelayMinutes: 2 * 60,
     },
 
     // ----------------- ГЛОБАЛЬНЫЕ НАПОМИНАНИЯ -----------------
