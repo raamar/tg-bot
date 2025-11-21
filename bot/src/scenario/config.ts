@@ -643,6 +643,15 @@ export const scenario: ScenarioConfig = {
         '<i>А ведь мы предупреждали...</i>\n',
       ].join(''),
       defaultDelayMinutes: 96 * 60,
+      buttons: [
+        [
+          {
+            kind: 'offer',
+            text: '👉 Получить гайд 👈',
+            offerKey: 'main_full_price',
+          },
+        ],
+      ],
     },
 
     '1763358086160': {
@@ -802,7 +811,15 @@ export const scenario: ScenarioConfig = {
         '<blockquote>💸 Гайд снова стоит 10.000₽</blockquote>\n\n',
         '<i>А ведь мы снова предупреждали...</i>\n',
       ].join(''),
-      buttons: [[{ kind: 'system', text: 'Выход', action: 'EXIT' }]],
+      buttons: [
+        [
+          {
+            kind: 'offer',
+            text: '👉 Получить гайд 👈',
+            offerKey: 'main_full_price',
+          },
+        ],
+      ],
     },
 
     // ----------------- ГЛОБАЛЬНЫЕ НАПОМИНАНИЯ -----------------
