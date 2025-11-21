@@ -12,7 +12,6 @@ import { prisma } from '../prisma'
 import { generateUserExcelBuffer } from '../helpers/exportToExcel'
 import { reminderQueue } from '../reminders/scheduler'
 import { ReminderStatus } from '@prisma/client'
-import { confirmPaymentAndNotify } from '../payments/confirmPayment'
 
 const getSession = async (ctx: { from?: { id: number } }): Promise<BroadcastSession | null> => {
   if (!ctx.from) return null
@@ -244,7 +243,6 @@ const adminActions: AdminActionHandlerMap = {
       }
 
       try {
-        await confirmPaymentAndNotify(telegramId, amount)
         await ctx.reply(
           `✅ Платёж подтверждён.\n` +
             `telegramId: ${telegramId}\n` +
