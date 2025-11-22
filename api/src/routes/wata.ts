@@ -1,6 +1,8 @@
 // src/routes/wataWebhook.ts
 import { Router } from 'express'
 import { cloudpaymentsQueue } from '../queues/cloudpayments'
+import { prisma } from '../prisma'
+import { PaymentStatus } from '@prisma/client'
 
 const router = Router()
 
@@ -65,7 +67,7 @@ router.post('/webhook', async (req, res) => {
       return res.status(400).send('Missing fields')
     }
 
-    // вычисляем наш "invoiceId"
+    // наш внутренний идентификатор платежа (чем раньше в цепочке – тем приоритетнее)
     const invoiceId = data.orderId || data.paymentLinkId || data.transactionId
 
     if (!invoiceId) {
@@ -73,6 +75,7 @@ router.post('/webhook', async (req, res) => {
       return res.status(400).send('Missing order identifier')
     }
 
+    // Логируем все статусы
     if (data.transactionStatus !== 'Paid') {
       log(requestId, 'Non-paid transaction received, ignoring but returning 200', {
         invoiceId,
@@ -85,6 +88,46 @@ router.post('/webhook', async (req, res) => {
       })
       return res.json({ code: 0 })
     }
+
+    // ---- ПРОВЕРКА НА ДУБЛИКАТ ----
+    // Предполагаем, что invoiceId = Payment.id (или каким-то образом с ним связан)
+    try {
+      const existingPayment = await prisma.payment.findUnique({
+        where: { id: invoiceId },
+        select: {
+          status: true,
+          paidAt: true,
+        },
+      })
+
+      if (existingPayment && existingPayment.status === PaymentStatus.PAID) {
+        log(requestId, 'Duplicate paid webhook, payment already marked as PAID — skipping enqueue', {
+          invoiceId,
+          status: existingPayment.status,
+          paidAt: existingPayment.paidAt,
+        })
+        return res.json({ code: 0 })
+      }
+
+      if (existingPayment) {
+        log(requestId, 'Existing payment found, but not PAID (will enqueue)', {
+          invoiceId,
+          status: existingPayment.status,
+          paidAt: existingPayment.paidAt,
+        })
+      } else {
+        log(requestId, 'No payment record found for invoiceId (will enqueue anyway, worker should handle)', {
+          invoiceId,
+        })
+      }
+    } catch (e) {
+      log(requestId, 'Error while checking duplicate payment in DB (continue anyway)', {
+        invoiceId,
+        error: e instanceof Error ? e.message : String(e),
+      })
+      // не валим запрос, просто логируем и продолжаем — хуже, если деньги не зачтём
+    }
+    // ---- КОНЕЦ ПРОВЕРКИ НА ДУБЛИКАТ ----
 
     log(requestId, 'Paid transaction received, enqueueing to cloudpaymentsQueue', {
       invoiceId,
@@ -100,7 +143,7 @@ router.post('/webhook', async (req, res) => {
 
     const job = await cloudpaymentsQueue.add('process-payment', {
       status: 'Completed',
-      invoiceId, // <-- тут теперь orderId / paymentLinkId / transactionId
+      invoiceId,
       amount: data.amount,
       raw: data as any,
     } as any)
