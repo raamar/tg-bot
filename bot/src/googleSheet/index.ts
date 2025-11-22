@@ -3,6 +3,8 @@ import { type sheets_v4 } from '@googleapis/sheets'
 import { prisma } from '../prisma'
 import { createSheetsClient } from './sheetsAuth'
 import { formatDate } from '../helpers/formatDate'
+import { scenario } from '../scenario/config'
+import { PaymentStatus } from '@prisma/client'
 
 // Настройки листа/записи
 const SHEET_NAME = 'Пользователи'
@@ -10,7 +12,7 @@ const BATCH_ROWS_DEFAULT = 5000
 const MIN_BATCH = 1
 const VALUE_INPUT_OPTION: 'RAW' | 'USER_ENTERED' = 'RAW'
 
-// Шапка остаётся прежней
+// Шапка остаётся прежней (совпадает с Excel-выгрузкой)
 const HEADERS = [
   'user_id',
   'username',
@@ -28,25 +30,25 @@ const HEADERS = [
 ] as const
 
 type RowTuple = [
-  string,
-  string,
-  string,
-  string,
-  string,
-  string, // дата/время регистрации
+  string, // user_id
+  string, // username
+  string, // Имя
+  string, // Фамилия
+  string, // Дата регистрации
+  string, // Время регистрации
   string, // ref
-  string, // ID Стадии
+  string, // ID Стадии (systemTitle или ID шага)
   string, // Сумма
   string, // Ссылка для оплаты
-  string,
-  string, // Дата/Время оплаты
+  string, // Дата оплаты
+  string, // Время оплаты
   string // Согласие
 ]
 
 // ---- ПОМОЩНИКИ ДЛЯ ПЛАТЕЖЕЙ ----
 
 // Берём последний оплаченный платёж (по paidAt, потом createdAt)
-const pickLastPaid = <T extends { status: string; paidAt: Date | null; createdAt: Date }>(ps: T[]) =>
+const pickLastPaid = <T extends { status: PaymentStatus; paidAt: Date | null; createdAt: Date }>(ps: T[]) =>
   ps
     .filter((p) => p.status === 'PAID')
     .sort(
@@ -54,7 +56,7 @@ const pickLastPaid = <T extends { status: string; paidAt: Date | null; createdAt
     )[0]
 
 // Берём самый актуальный инвойс для оплаты — последний PENDING по createdAt
-const pickLatestPending = <T extends { status: string; createdAt: Date }>(ps: T[]) =>
+const pickLatestPending = <T extends { status: PaymentStatus; createdAt: Date }>(ps: T[]) =>
   ps.filter((p) => p.status === 'PENDING').sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0]
 
 // ---- ТРАНСФОРМ В СТРОКИ ----
@@ -69,6 +71,10 @@ const usersToRows = (users: ExportUser[]): RowTuple[] =>
     const createdParts = formatDate(u.createdAt).split(' ')
     const paidParts = paid?.paidAt ? formatDate(paid.paidAt).split(' ') : ['', '']
 
+    const currentStepId = u.currentStepId || ''
+    const systemTitle = scenario.steps[currentStepId]?.systemTitle
+    const stageCell = systemTitle || String(currentStepId || '')
+
     return [
       String(u.telegramId ?? ''),
       u.username ?? '',
@@ -77,7 +83,7 @@ const usersToRows = (users: ExportUser[]): RowTuple[] =>
       createdParts[0] ?? '',
       createdParts[1] ?? '',
       u.refSource ?? '',
-      String(u.currentStepId ?? ''), // было funnelProgress.stageId
+      stageCell, // как в Excel: systemTitle или ID шага
       paid?.amount != null ? String(paid.amount) : '', // сумма последнего успешного платежа
       pending?.url ?? '', // ссылка на актуальный инвойс (если есть)
       paidParts[0],

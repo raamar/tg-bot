@@ -1,6 +1,7 @@
 import ExcelJS from 'exceljs'
 import { User, PaymentStatus } from '@prisma/client'
 import { formatDate } from './formatDate'
+import { scenario } from '../scenario/config'
 
 export type ExportUser = User & {
   payments: {
@@ -36,7 +37,7 @@ export const generateUserExcelBuffer = async (users: ExportUser[]): Promise<Buff
     { header: 'Дата регистрации', key: 'createdDate', width: 15 },
     { header: 'Время регистрации', key: 'createdTime', width: 15 },
     { header: 'ref', key: 'refSource', width: 20 },
-    { header: 'ID Стадии', key: 'stageId', width: 20 }, // теперь это currentStepId
+    { header: 'ID Стадии', key: 'stageId', width: 20 },
     { header: 'Сумма', key: 'amount', width: 12 },
     { header: 'Cсылка для оплаты', key: 'url', width: 40 },
     { header: 'Дата оплаты', key: 'paidDate', width: 15 },
@@ -60,7 +61,7 @@ export const generateUserExcelBuffer = async (users: ExportUser[]): Promise<Buff
       createdDate: createdParts[0] ?? '',
       createdTime: createdParts[1] ?? '',
       refSource: user.refSource || '',
-      stageId: user.currentStepId || '', // ← раньше было funnelProgress.stageId
+      stageId: scenario.steps[user.currentStepId || '']?.systemTitle || user.currentStepId, // ← раньше было funnelProgress.stageId
       amount: paidPayment?.amount != null ? String(paidPayment.amount) : '',
       url: pendingPayment?.url || '', // ← свежая ссылка на оплату
       paidDate,
