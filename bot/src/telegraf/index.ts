@@ -422,6 +422,15 @@ bot.on('message', (ctx, next) => {
 
 // отметка подписки из chat_join_request
 bot.on('chat_join_request', async (ctx) => {
+  const chatId = ctx.update.chat_join_request.chat.id
+  const userId = ctx.update.chat_join_request.from.id
+
+  // 1. Одобрить запрос на вступление
+  await ctx.telegram.callApi('approveChatJoinRequest', {
+    chat_id: chatId,
+    user_id: userId,
+  })
+
   await prisma.user.update({
     where: { telegramId: String(ctx.from.id) },
     data: { subscribed: true },
