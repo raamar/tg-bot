@@ -95,6 +95,7 @@ export interface ReminderBinding {
 export interface StepConfig {
   text: string
 
+  systemTitle?: string
   media?: MediaConfig[]
 
   buttons?: ButtonRow[]
