@@ -1,6 +1,7 @@
 services:
   traefik:
     profiles: ['traefik']
+    container_name: traefik
     image: traefik:v2.11
     restart: always
     command:
