@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto'
 // bot/src/scenario/engine.ts
 
 import { FmtString } from 'telegraf/format'
-import { OfferStatus, StepVisitSource } from '@prisma/client'
+import { OfferStatus, PaymentStatus, StepVisitSource } from '@prisma/client'
 import { prisma } from '../prisma'
 import { bot } from '../telegraf'
 import { scenario } from './config'
@@ -36,7 +36,7 @@ function withDevMeta(stepId: StepId, text: string): string {
   return meta + text
 }
 
-async function buildInlineKeyboard(step: StepConfig): Promise<InlineKeyboardMarkup | undefined> {
+async function buildInlineKeyboard(step: StepConfig, userId?: string): Promise<InlineKeyboardMarkup | undefined> {
   if (!step.buttons || step.buttons.length === 0) return undefined
 
   const inline_keyboard: InlineKeyboardButton[][] = await Promise.all(
@@ -79,7 +79,19 @@ async function buildInlineKeyboard(step: StepConfig): Promise<InlineKeyboardMark
                   // можно настроить в личном кабинете WATA / использовать дефолты.
                 }
 
-                const link = await wata.createPaymentLink(payload)
+                const [link] = await Promise.all([
+                  wata.createPaymentLink(payload),
+                  prisma.payment.create({
+                    data: {
+                      id: paymentId,
+                      userId: userId || '',
+                      amount: offer?.phases?.[0].price ?? 10000,
+                      currency: offer?.currency || 'RUB',
+                      status: PaymentStatus.PENDING,
+                    },
+                  }),
+                ])
+
                 return {
                   text: btn.text,
                   url: link.url,
@@ -200,7 +212,7 @@ export async function enterStepForUser(userId: string, stepId: StepId, source: S
     await flushBuffer()
   }
 
-  const keyboard = await buildInlineKeyboard(step)
+  const keyboard = await buildInlineKeyboard(step, user.id)
 
   const finalText = withDevMeta(stepId, step.text)
 

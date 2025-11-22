@@ -7,7 +7,7 @@ import { scenario } from '../scenario/config'
 import { PaymentStatus } from '@prisma/client'
 
 // Настройки листа/записи
-const SHEET_NAME = 'Пользователи'
+const SHEET_NAME = process.env.GOOGLE_SHEET_LIST_NAME || 'Пользователи'
 const BATCH_ROWS_DEFAULT = 5000
 const MIN_BATCH = 1
 const VALUE_INPUT_OPTION: 'RAW' | 'USER_ENTERED' = 'RAW'

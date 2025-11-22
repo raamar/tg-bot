@@ -15,7 +15,6 @@ import { getLatestOfferInstance, ensureOfferInstanceStarted } from '../offers/en
 import { scheduleOfferMessageExpiration } from '../offers/scheduler'
 import { StepVisitSource, OfferStatus } from '@prisma/client'
 import { SystemAction, OfferKey } from '../scenario/types'
-import { offersConfig } from '../scenario/offers'
 
 import { adminActions } from './adminActions'
 import { DocumentContext, PhotoContext, TextContext } from '../types/admin'
