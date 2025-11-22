@@ -135,19 +135,69 @@ export async function enterStepForUser(userId: string, stepId: StepId, source: S
     await ensureOfferInstanceStarted(user.id, step.offerKey)
   }
 
-  // Отправка медиаконтента шага
   if (step.media && step.media.length > 0) {
+    type GroupableMediaType = 'photo' | 'video'
+
+    const isGroupable = (t: string): t is GroupableMediaType => t === 'photo' || t === 'video'
+
+    let buffer: typeof step.media = []
+
+    const flushBuffer = async () => {
+      if (buffer.length === 0) return
+
+      // Telegram ограничивает media group 10 элементами,
+      // но мы и так флашим по 10, так что здесь размер <= 10.
+      if (buffer.length === 1) {
+        const m = buffer[0]
+        if (m.type === 'photo') {
+          await bot.telegram.sendPhoto(user.telegramId, m.fileIdOrUrl, {})
+        } else if (m.type === 'video') {
+          await bot.telegram.sendVideo(user.telegramId, m.fileIdOrUrl, {})
+        }
+      } else {
+        await bot.telegram.sendMediaGroup(
+          user.telegramId,
+          buffer.map((m) =>
+            m.type === 'photo'
+              ? ({
+                  type: 'photo',
+                  media: m.fileIdOrUrl,
+                } as const)
+              : ({
+                  type: 'video',
+                  media: m.fileIdOrUrl,
+                } as const)
+          )
+        )
+      }
+
+      buffer = []
+    }
+
     for (const media of step.media) {
-      if (media.type === 'photo') {
-        await bot.telegram.sendPhoto(user.telegramId, media.fileIdOrUrl, {})
-      } else if (media.type === 'video_note') {
-        await bot.telegram.sendVideoNote(user.telegramId, media.fileIdOrUrl)
-      } else if (media.type === 'audio') {
-        await bot.telegram.sendAudio(user.telegramId, media.fileIdOrUrl)
-      } else if (media.type === 'video') {
-        await bot.telegram.sendVideo(user.telegramId, media.fileIdOrUrl)
+      if (isGroupable(media.type)) {
+        buffer.push(media)
+
+        // если набрали 10 элементов — отправляем группу
+        if (buffer.length === 10) {
+          await flushBuffer()
+        }
+      } else {
+        // Перед неконвертируемым типом сначала флашим буфер фото/видео
+        await flushBuffer()
+
+        if (media.type === 'video_note') {
+          await bot.telegram.sendVideoNote(user.telegramId, media.fileIdOrUrl)
+        } else if (media.type === 'audio') {
+          await bot.telegram.sendAudio(user.telegramId, media.fileIdOrUrl)
+        } else {
+          // если вдруг появятся новые типы — можно логнуть/обработать здесь
+        }
       }
     }
+
+    // отправляем остаток фото/видео
+    await flushBuffer()
   }
 
   const keyboard = await buildInlineKeyboard(step)

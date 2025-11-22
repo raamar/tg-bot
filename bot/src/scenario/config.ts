@@ -156,6 +156,7 @@ export const scenario: ScenarioConfig = {
         { stepId: '1763357850855', condition: { type: 'notPaid' } },
         { stepId: '1763357873079', condition: { type: 'notPaid' } },
         { stepId: '1763357895558', condition: { type: 'notPaid' } },
+        { stepId: '1763357920193', condition: { type: 'notPaid' } },
         { stepId: '1763357946731', condition: { type: 'notPaid' } },
         { stepId: '1763357964926', condition: { type: 'notPaid' } },
         { stepId: '1763357977831', condition: { type: 'notPaid' } },
@@ -388,10 +389,16 @@ export const scenario: ScenarioConfig = {
         'И такие результаты <b>ТОЛЬКО С ОДНОЙ МОДЕЛИ,</b> а вести таких можно сразу <b>НЕСКОЛЬКО❗️</b>\n\n',
         '<blockquote>И ты можешь так же! Пошаговый план, который нужно просто взять и повторить, по кнопке ниже! 🤫</blockquote>\n\n\n',
       ].join(''),
+
+      defaultDelayMinutes: 24 * 60,
       media: [
         {
-          fileIdOrUrl: 'AgACAgIAAxkBAAJJK2kdOSireDaKK-TqPijgpeKISkACAAIzDGsbNOboSAIrQotUdFPhAQADAgADeAADNgQ',
+          fileIdOrUrl: 'AgACAgIAAxkBAAJOUGkhCtXWQpMai7e9JIGcs-EgILwtAAKHC2sbkFUJSZBzZYnDzlhXAQADAgADeAADNgQ',
           type: 'photo',
+        },
+        {
+          fileIdOrUrl: 'BAACAgIAAxkBAAJOUWkhCv9NpM3taKTX3aoxpIm98GE7AAJ4hQACS3uJSPHSVaV3dnZ6NgQ',
+          type: 'video',
         },
       ],
       buttons: [
@@ -414,7 +421,27 @@ export const scenario: ScenarioConfig = {
       defaultDelayMinutes: 48 * 60,
       media: [
         {
-          fileIdOrUrl: 'AgACAgIAAxkBAAJJLGkdOWxbCuDvHJshomkhZsDzqJJ0AAI0DGsbNOboSIKp4BfTs3a1AQADAgADeQADNgQ',
+          fileIdOrUrl: 'AgACAgIAAxkBAAJOUmkhC2_BZgVbTITFTmJ-GssyAAFA2QACigtrG5BVCUmbWM3zyJEX1wEAAwIAA3kAAzYE',
+          type: 'photo',
+        },
+        {
+          fileIdOrUrl: 'AgACAgIAAxkBAAJOU2khC5U6J_2KRyFTKpvWLJdS-qsBAAKNC2sbkFUJSTqL9D8loX42AQADAgADeQADNgQ',
+          type: 'photo',
+        },
+        {
+          fileIdOrUrl: 'AgACAgIAAxkBAAJOVWkhC7hXR3ZITYcbh9rN9J3KpddoAAKPC2sbkFUJSQ0eUQuOqpr-AQADAgADeQADNgQ',
+          type: 'photo',
+        },
+        {
+          fileIdOrUrl: 'AgACAgIAAxkBAAJOVmkhC8MjE4rSvfHR7a48M2Mbr56MAAKQC2sbkFUJST3wsEx1E7IzAQADAgADeQADNgQ',
+          type: 'photo',
+        },
+        {
+          fileIdOrUrl: 'AgACAgIAAxkBAAJOV2khC9EigghjdFKyqg_iwHpskL0LAAKRC2sbkFUJSWB0Mikm9Oq6AQADAgADeQADNgQ',
+          type: 'photo',
+        },
+        {
+          fileIdOrUrl: 'AgACAgIAAxkBAAJOWGkhC9wj3sULspOhiBqrvIlrayq6AAKSC2sbkFUJSYjAtDw81ObrAQADAgADeQADNgQ',
           type: 'photo',
         },
       ],
