@@ -1,5 +1,5 @@
 // src/routes/wataWebhook.ts
-import { Router, raw } from 'express'
+import { Router } from 'express'
 import { cloudpaymentsQueue } from '../queues/cloudpayments'
 
 const router = Router()
@@ -29,14 +29,12 @@ const log = (...args: any[]) => {
   console.log(new Date().toISOString(), '[WATA_WEBHOOK]', ...args)
 }
 
-// Подпись НЕ проверяем — просто читаем raw JSON и парсим
-router.post('/webhook', raw({ type: '*/*' }), async (req, res) => {
+// Подпись НЕ проверяем — используем готовый JSON (application/json)
+router.post('/webhook', async (req, res) => {
   // уникальный id для увязки логов одного запроса
   const requestId = `${Date.now().toString(36)}-${Math.random().toString(16).slice(2, 8)}`
 
   try {
-    const rawBody = req.body as Buffer
-
     log(requestId, 'Incoming request meta', {
       method: req.method,
       url: req.originalUrl,
@@ -44,27 +42,44 @@ router.post('/webhook', raw({ type: '*/*' }), async (req, res) => {
       ips: req.ips,
       headers: req.headers,
       query: req.query,
+      bodyType: typeof req.body,
     })
 
-    if (!rawBody || !Buffer.isBuffer(rawBody)) {
-      log(requestId, 'Invalid body: not a Buffer', { bodyType: typeof rawBody })
+    if (!req.body) {
+      log(requestId, 'Empty body')
       return res.status(400).send('Invalid body')
     }
 
-    const text = rawBody.toString('utf8')
-    log(requestId, 'Raw body text:', text)
-
     let data: WataWebhookPayload
-    try {
-      data = JSON.parse(text)
-      log(requestId, 'Parsed JSON payload:', data)
-    } catch (err) {
-      log(requestId, 'Invalid JSON payload', {
-        error: err instanceof Error ? err.message : String(err),
-        rawBody: text,
-      })
-      return res.status(400).send('Invalid JSON')
+
+    // На случай, если body всё ещё строка или Buffer по каким-то причинам
+    if (typeof req.body === 'string') {
+      try {
+        data = JSON.parse(req.body)
+      } catch (err) {
+        log(requestId, 'Invalid JSON string in body', {
+          error: err instanceof Error ? err.message : String(err),
+          rawBody: req.body,
+        })
+        return res.status(400).send('Invalid JSON')
+      }
+    } else if (Buffer.isBuffer(req.body)) {
+      const text = req.body.toString('utf8')
+      try {
+        data = JSON.parse(text)
+      } catch (err) {
+        log(requestId, 'Invalid JSON buffer in body', {
+          error: err instanceof Error ? err.message : String(err),
+          rawBody: text,
+        })
+        return res.status(400).send('Invalid JSON')
+      }
+    } else {
+      // Обычный случай: express.json() уже распарсил body в объект
+      data = req.body as WataWebhookPayload
     }
+
+    log(requestId, 'Parsed JSON payload:', data)
 
     if (!data.id || !data.transactionStatus) {
       log(requestId, 'Missing required fields', {
@@ -100,21 +115,12 @@ router.post('/webhook', raw({ type: '*/*' }), async (req, res) => {
       orderDescription: data.orderDescription,
     })
 
-    // 🔗 ВАЖНО:
-    // здесь предполагается, что при создании ссылки на оплату
-    // ты сохраняешь data.id (WATA order id) в Payment.id
-    // (или наоборот — просто чтобы id из вебхука совпадал с Payment.id).
-    //
-    // Дальше шлём задачу в уже существующую очередь, которую обрабатывает бот.
-    // CloudpaymentsQueuePayload:
-    //   { status: 'Completed'; invoiceId: string; amount: number; raw: Record<string, string> }
-    //
-    // status жёстко ставим 'Completed', чтобы воркер воспринял это как успешную оплату.
+    // ВАЖНО: предполагаем, что WATA order id = Payment.id
     const job = await cloudpaymentsQueue.add('process-payment', {
       status: 'Completed',
-      invoiceId: data.id, // == Payment.id
+      invoiceId: data.id,
       amount: data.amount,
-      raw: data as any, // тип raw в воркере можно оставить как есть
+      raw: data as any,
     } as any)
 
     log(requestId, 'Job added to cloudpaymentsQueue', {
@@ -128,7 +134,6 @@ router.post('/webhook', raw({ type: '*/*' }), async (req, res) => {
       error: err instanceof Error ? err.message : String(err),
       stack: err instanceof Error ? err.stack : undefined,
     })
-    // WATA всё равно будет ретраить, но лучше честно вернуть 500
     return res.status(500).send('Internal error')
   }
 })
