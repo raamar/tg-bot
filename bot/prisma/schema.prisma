@@ -182,5 +182,11 @@ enum StepVisitSource {
 enum OfferKey {
   main_full_price
   main_discount_50
+  main_discount_50_2
+  main_discount_50_3
+  main_discount_50_4
+  main_discount_50_5
+  main_discount_50_6
   main_last_chance
+  main_last_chance_2
 }

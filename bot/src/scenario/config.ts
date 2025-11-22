@@ -126,22 +126,28 @@ export const scenario: ScenarioConfig = {
       ].join(''),
       buttons: [
         [
+          { kind: 'url', text: 'Что внутри гайда', url: 'https://telegra.ph/CHto-tebya-zhdyot-vnutri-Gajda-10-07' },
+          { kind: 'url', text: 'Отзывы', url: 'https://t.me/only_neuro_otzivi' },
+        ],
+        [
           {
-            kind: 'system',
-            text: ' Что внутри гайда ',
-            action: 'SHOW_CONTENTS',
-          },
-          {
-            kind: 'system',
-            text: ' Отзывы ',
-            action: 'SHOW_REVIEWS',
+            kind: 'pay_url',
+            text: ' 👉 Купить за 9.990₽ (РФ Карта)👈 ',
+            offerKey: 'main_full_price',
           },
         ],
         [
           {
-            kind: 'offer',
-            text: ' 👉 Купить за 9.990₽ 👈 ',
-            offerKey: 'main_full_price',
+            kind: 'url',
+            text: ' 👉 Купить за 9.990₽ (Не РФ Карта)👈',
+            url: 'https://t.me/m/XGDbStMDNjYy',
+          },
+        ],
+        [
+          {
+            kind: 'url',
+            text: ' 👉 Купить за 9.990₽ (Крипта)👈',
+            url: 'https://t.me/m/DckHQcUiYTU6',
           },
         ],
       ],
@@ -596,16 +602,8 @@ export const scenario: ScenarioConfig = {
       defaultDelayMinutes: 168 * 60,
       buttons: [
         [
-          {
-            kind: 'system',
-            text: 'Отзывы',
-            action: 'SHOW_REVIEWS',
-          },
-          {
-            kind: 'system',
-            text: 'Что внутри',
-            action: 'SHOW_CONTENTS',
-          },
+          { kind: 'url', text: 'Что внутри гайда', url: 'https://telegra.ph/CHto-tebya-zhdyot-vnutri-Gajda-10-07' },
+          { kind: 'url', text: 'Отзывы', url: 'https://t.me/only_neuro_otzivi' },
         ],
         [
           {
@@ -779,12 +777,12 @@ export const scenario: ScenarioConfig = {
       defaultDelayMinutes: 168 * 60,
       buttons: [
         [
-          { kind: 'system', text: 'Отзывы', action: 'SHOW_REVIEWS' },
-          { kind: 'system', text: 'Что внутри', action: 'SHOW_CONTENTS' },
+          { kind: 'url', text: 'Что внутри гайда', url: 'https://telegra.ph/CHto-tebya-zhdyot-vnutri-Gajda-10-07' },
+          { kind: 'url', text: 'Отзывы', url: 'https://t.me/only_neuro_otzivi' },
         ],
-        [{ kind: 'offer', text: '👉 Получить гайд 👈', offerKey: 'main_discount_50' }],
+        [{ kind: 'offer', text: '👉 Получить гайд 👈', offerKey: 'main_discount_50_2' }],
       ],
-      offerKey: 'main_discount_50',
+      offerKey: 'main_discount_50_2',
     },
 
     '1763358138463': {
@@ -843,12 +841,12 @@ export const scenario: ScenarioConfig = {
       ],
       buttons: [
         [
-          { kind: 'system', text: 'Отзывы', action: 'SHOW_REVIEWS' },
-          { kind: 'system', text: 'Что внутри', action: 'SHOW_CONTENTS' },
+          { kind: 'url', text: 'Что внутри гайда', url: 'https://telegra.ph/CHto-tebya-zhdyot-vnutri-Gajda-10-07' },
+          { kind: 'url', text: 'Отзывы', url: 'https://t.me/only_neuro_otzivi' },
         ],
-        [{ kind: 'offer', text: '👉 Получить гайд 👈', offerKey: 'main_discount_50' }],
+        [{ kind: 'offer', text: '👉 Получить гайд 👈', offerKey: 'main_discount_50_3' }],
       ],
-      offerKey: 'main_discount_50',
+      offerKey: 'main_discount_50_3',
     },
 
     '1763358293919': {
@@ -873,8 +871,8 @@ export const scenario: ScenarioConfig = {
       isGlobalReminder: true,
       buttons: [
         [
-          { kind: 'system', text: 'Отзывы', action: 'SHOW_REVIEWS' },
-          { kind: 'system', text: 'Что внутри', action: 'SHOW_CONTENTS' },
+          { kind: 'url', text: 'Что внутри гайда', url: 'https://telegra.ph/CHto-tebya-zhdyot-vnutri-Gajda-10-07' },
+          { kind: 'url', text: 'Отзывы', url: 'https://t.me/only_neuro_otzivi' },
         ],
         [{ kind: 'offer', text: '👉 Получить гайд 👈', offerKey: 'main_last_chance' }],
       ],

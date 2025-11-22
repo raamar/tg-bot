@@ -55,6 +55,11 @@ export type ButtonConfig =
       text: string
       offerKey: OfferKey
     }
+  | {
+      kind: 'pay_url'
+      text: string
+      offerKey: OfferKey
+    }
 
 export type ButtonRow = ButtonConfig[]
 

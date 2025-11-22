@@ -9,7 +9,7 @@ import telegrafThrottler from 'telegraf-throttler'
 import { redis } from '../redis'
 import { prisma } from '../prisma'
 import { scenario } from '../scenario/config'
-import { scheduleRemindersForStep } from '../reminders/scheduler'
+import { scheduleRemindersForStep, skipAllRemindersForUser } from '../reminders/scheduler'
 import { enterStepForUser } from '../scenario/engine'
 import { getLatestOfferInstance, ensureOfferInstanceStarted } from '../offers/engine'
 import { scheduleOfferMessageExpiration } from '../offers/scheduler'
@@ -112,7 +112,7 @@ function formatMoscow(date: Date): string {
 
 function getExternalPaymentUrls(instance: any) {
   const key = instance.offerKey as OfferKey
-  const isDiscount = key === 'main_discount_50' || key === 'main_last_chance'
+  const isDiscount = key.includes('main_discount_50') || key.includes('main_last_chance')
 
   return {
     foreignCardUrl: isDiscount ? FOREIGN_DISCOUNT_URL : FOREIGN_FULL_URL,
@@ -133,66 +133,20 @@ function buildOfferKeyboard(instance: any, ruCardUrl?: string) {
 }
 
 function buildOfferWindowText(instance: any): string {
-  const now = new Date()
-  const template = offersConfig[instance.offerKey as OfferKey]
-  const title = template?.title ?? 'Персональное предложение'
-
   const amount = Number(instance.initialPrice || 0)
-  const priceText = `${amount.toFixed(2)} ${instance.currency}`
+  const priceText = `${amount.toFixed(2)}`
+  const isShort = instance.offerKey.includes('main_last_chance') || instance.offerKey.includes('main_discount_50')
 
-  const createdAtLine = instance.createdAt ? `Создано: <b>${formatMoscow(new Date(instance.createdAt))}</b>\n` : ''
-
-  let expiresLine = ''
-  let leftLine = ''
-
-  // Только если оффер временный (есть expiresAt)
-  if (instance.expiresAt) {
-    const expiresDate = new Date(instance.expiresAt)
-    expiresLine = `Действует до: <b>${formatMoscow(expiresDate)} MSK</b>\n`
-
-    const diffMs = expiresDate.getTime() - now.getTime()
-    if (diffMs > 0) {
-      if (!IS_PROD) {
-        const sec = Math.max(1, Math.round(diffMs / 1000))
-        leftLine = `⏳ (dev) Осталось примерно ${sec} сек до завершения предложения.\n`
-      } else {
-        const totalMinutes = Math.max(1, Math.round(diffMs / 60000))
-        const hours = Math.floor(totalMinutes / 60)
-        const mins = totalMinutes % 60
-        const parts: string[] = []
-        if (hours) parts.push(`${hours} ч`)
-        if (mins) parts.push(`${mins} мин`)
-        leftLine = `⏳ Осталось примерно ${parts.join(' ')}.\n`
-      }
-    }
+  if (isShort) {
+    return ['👇 Выберите способ оплаты! 👇'].join('')
   }
-
-  let statusText = ''
-  if (instance.status === OfferStatus.PAID) {
-    statusText = '✅ Уже оплачено.'
-  } else if (instance.status === OfferStatus.EXPIRED) {
-    statusText = '⏰ Срок действия предложения истёк.'
-  } else if (instance.status === OfferStatus.CANCELED) {
-    statusText = '❌ Предложение отменено.'
-  } else if (instance.status === OfferStatus.ACTIVE) {
-    statusText = '🔥 Предложение ещё активно.'
-  }
-
-  const devMeta = !IS_PROD
-    ? `<code>[offer=${instance.id}, key=${instance.offerKey}, price=${priceText}]</code>\n\n`
-    : ''
-
-  const lines = [
-    devMeta,
-    `<b>🧾 ${title}</b>\n\n`,
-    `Текущая цена: <b>${priceText}</b>\n`,
-    createdAtLine,
-    expiresLine,
-    leftLine,
-    statusText,
-  ]
-
-  return lines.filter(Boolean).join('')
+  return [
+    '<b>🤖👩🏻 <u>ГАЙД + чат: Как я заработал миллион на генерации ИИ-девушек для OnlyFans</u></b>\n\n',
+    '🚀 И да, ты получаешь не просто гайд, а <b>ПОЖИЗНЕННЫЙ доступ</b> ко всем обновлениям и новым фишкам <i>(без каких либо доплат) </i>+ <b>общий ЧАТ </b><i>(где ты можешь задавать свои вопросы)</i> 🔥\n\n',
+    `<blockquote><b>😱 <u>И вся эта инфа всего за ${priceText}₽</u> 😱</b></blockquote>\n\n`,
+    '<i>P.S. цена такая низкая только на старте, так как мне нужны первые отзывы </i>🙌<i> Дальше стоимость вырастет в несколько раз, так что советую тебе поторопиться с покупкой </i>😉\n\n',
+    'При проблемах с оплатой, писать сюда: @only_neuro_chat\n',
+  ].join('')
 }
 
 // ================== SCENARIO HANDLERS ==================
@@ -225,6 +179,7 @@ bot.start(
 
     const entryStepId = scenario.entryStepId
     await enterStepForUser(user.id, entryStepId, StepVisitSource.SYSTEM)
+    await skipAllRemindersForUser(user.id)
     await scheduleRemindersForStep(user.id, entryStepId, 'default')
   })
 )
@@ -262,6 +217,8 @@ bot.action(
 
         const stepId = payload
         await enterStepForUser(user.id, stepId, StepVisitSource.CLICK)
+
+        await skipAllRemindersForUser(user.id)
         await scheduleRemindersForStep(user.id, stepId, 'default')
         break
       }

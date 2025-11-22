@@ -5,7 +5,7 @@ import { OfferInstance, PaymentStatus } from '@prisma/client'
 import { prisma } from '../prisma'
 import { CreatePaymentLinkRequest, WataClient, WataCurrency, WataMode } from './wata'
 
-const wata = new WataClient({
+export const wata = new WataClient({
   mode: 'prod',
 })
 

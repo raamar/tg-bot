@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto'
 // bot/src/scenario/engine.ts
 
 import { FmtString } from 'telegraf/format'
@@ -9,13 +10,15 @@ import { StepConfig, StepId, ButtonConfig, OfferKey } from './types'
 import { offersConfig } from './offers'
 import { InlineKeyboardButton, InlineKeyboardMarkup } from 'telegraf/types'
 import { ensureOfferInstanceStarted } from '../offers/engine'
+import { CreatePaymentLinkRequest } from '../payments/wata'
+import { wata } from '../payments/ensureWataOfferPayment'
 
 const IS_PROD = process.env.NODE_ENV === 'production'
 const MOSCOW_TZ = 'Europe/Moscow'
 
 // dev-обёртка текста: префикс с мета-информацией
 function withDevMeta(stepId: StepId, text: string): string {
-  if (true) return text
+  // if (true) return text
 
   const now = new Date()
   const formatted = now.toLocaleString('ru-RU', {
@@ -33,35 +36,58 @@ function withDevMeta(stepId: StepId, text: string): string {
   return meta + text
 }
 
-function buildInlineKeyboard(step: StepConfig): InlineKeyboardMarkup | undefined {
+async function buildInlineKeyboard(step: StepConfig): Promise<InlineKeyboardMarkup | undefined> {
   if (!step.buttons || step.buttons.length === 0) return undefined
 
-  const inline_keyboard: InlineKeyboardButton[][] = step.buttons.map((row) =>
-    row.map((btn: ButtonConfig): InlineKeyboardButton => {
-      switch (btn.kind) {
-        case 'step':
-          return {
-            text: btn.text,
-            callback_data: `SCN:STEP:${btn.stepId}`,
-          }
-        case 'system':
-          return {
-            text: btn.text,
-            callback_data: `SCN:SYSTEM:${btn.action}`,
-          }
-        case 'offer':
-          return {
-            text: btn.text,
-            callback_data: `SCN:OFFER:${btn.offerKey}`,
-          }
-        case 'url':
-          // тут url обязательный, поэтому ок
-          return {
-            text: btn.text,
-            url: btn.url,
-          }
-      }
-    })
+  const inline_keyboard: InlineKeyboardButton[][] = await Promise.all(
+    step.buttons.map(
+      async (row) =>
+        await Promise.all(
+          row.map(async (btn: ButtonConfig): Promise<InlineKeyboardButton> => {
+            switch (btn.kind) {
+              case 'step':
+                return {
+                  text: btn.text,
+                  callback_data: `SCN:STEP:${btn.stepId}`,
+                }
+              case 'system':
+                return {
+                  text: btn.text,
+                  callback_data: `SCN:SYSTEM:${btn.action}`,
+                }
+              case 'offer':
+                return {
+                  text: btn.text,
+                  callback_data: `SCN:OFFER:${btn.offerKey}`,
+                }
+              case 'url':
+                // тут url обязательный, поэтому ок
+                return {
+                  text: btn.text,
+                  url: btn.url,
+                }
+              case 'pay_url':
+                const paymentId = randomUUID()
+                const offer = offersConfig[btn.offerKey]
+                const payload: CreatePaymentLinkRequest = {
+                  type: 'OneTime',
+                  amount: offer?.phases?.[0].price ?? 10000,
+                  currency: offer?.currency || 'RUB',
+                  description: offer.title,
+                  orderId: paymentId,
+                  // successRedirectUrl и failRedirectUrl НЕ передаём —
+                  // можно настроить в личном кабинете WATA / использовать дефолты.
+                }
+
+                const link = await wata.createPaymentLink(payload)
+                return {
+                  text: btn.text,
+                  url: link.url,
+                }
+            }
+          })
+        )
+    )
   )
 
   return { inline_keyboard }
@@ -124,7 +150,7 @@ export async function enterStepForUser(userId: string, stepId: StepId, source: S
     }
   }
 
-  const keyboard = buildInlineKeyboard(step)
+  const keyboard = await buildInlineKeyboard(step)
 
   const finalText = withDevMeta(stepId, step.text)
 

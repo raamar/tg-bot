@@ -4,7 +4,7 @@ import { Job, Worker } from 'bullmq'
 import { ReminderStatus, StepVisitSource } from '@prisma/client'
 import { redis } from '../redis'
 import { prisma } from '../prisma'
-import { ReminderJobPayload, REMINDER_QUEUE_NAME, reminderQueue, scheduleRemindersForStep } from './scheduler'
+import { ReminderJobPayload, REMINDER_QUEUE_NAME, scheduleRemindersForStep } from './scheduler'
 import { enterStepForUser } from '../scenario/engine'
 
 export const reminderWorker = new Worker<ReminderJobPayload>(

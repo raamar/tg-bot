@@ -32,7 +32,7 @@ function toDelayMs(delayMinutes: number): number {
     return baseMs
   }
 
-  const devMs = delayMinutes * 3
+  const devMs = delayMinutes
   const final = Math.max(500, devMs) // минимум 0.5 секунды
 
   console.log(`[REMINDER] dev delay: original=${delayMinutes}min (${baseMs}ms) -> dev=${final}ms`)
@@ -94,5 +94,42 @@ export async function scheduleRemindersForStep(
       where: { id: subscription.id },
       data: { bullJobId: job.id },
     })
+  }
+}
+
+/**
+ * Помечает все будущие напоминания пользователя как SKIPPED
+ * и удаляет соответствующие job из Bull.
+ */
+export async function skipAllRemindersForUser(userId: string): Promise<void> {
+  // Находим все напоминания, которые ещё не отправлены
+  const reminders = await prisma.reminderSubscription.findMany({
+    where: {
+      userId,
+      status: ReminderStatus.PENDING,
+    },
+  })
+
+  if (reminders.length === 0) return
+
+  for (const reminder of reminders) {
+    try {
+      // 1. Удаляем job из очереди Bull
+      if (reminder.bullJobId) {
+        try {
+          await reminderQueue.removeJobScheduler(`reminder:${reminder.id}`)
+        } catch (err) {
+          console.warn(`Не удалось удалить job ${reminder.id}`, err)
+        }
+      }
+
+      // 2. Помечаем как SKIPPED
+      await prisma.reminderSubscription.update({
+        where: { id: reminder.id },
+        data: { status: ReminderStatus.SKIPPED },
+      })
+    } catch (err) {
+      console.error(`Ошибка при SKIP напоминания ${reminder.id}`, err)
+    }
   }
 }
