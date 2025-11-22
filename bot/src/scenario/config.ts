@@ -237,7 +237,7 @@ export const scenario: ScenarioConfig = {
         '<b>🙏 Просто напоминаю...</b>\n\n',
         'Посмотреть <b>БЕСПЛАТНОЕ</b> обучение можно только в течении 24 часов - <b>потом материал исчезнет!</b>\n',
       ].join(''),
-      defaultDelayMinutes: 20 * 60,
+      defaultDelayMinutes: 2 * 60,
     },
 
     '1763357733126': {
@@ -248,7 +248,7 @@ export const scenario: ScenarioConfig = {
         'Вернуть его обратно - уже никак не получится!\n\n',
         '<blockquote>Не упусти это возможность!</blockquote>\n\n',
       ].join(''),
-      defaultDelayMinutes: 2 * 60,
+      defaultDelayMinutes: 20 * 60,
     },
 
     '1763357751260': {
@@ -257,7 +257,7 @@ export const scenario: ScenarioConfig = {
         '<b>🙏 Просто напоминаю...</b>\n\n',
         'Посмотреть <b>БЕСПЛАТНОЕ</b> обучение можно только в течении 24 часов - <b>потом материал исчезнет!</b>\n',
       ].join(''),
-      defaultDelayMinutes: 20 * 60,
+      defaultDelayMinutes: 2 * 60,
     },
 
     '1763357770659': {
@@ -268,7 +268,7 @@ export const scenario: ScenarioConfig = {
         'Вернуть его обратно - уже никак не получится!\n\n',
         '<blockquote>Не упусти это возможность!</blockquote>\n\n',
       ].join(''),
-      defaultDelayMinutes: 2 * 60,
+      defaultDelayMinutes: 20 * 60,
     },
 
     '1763357793780': {
@@ -278,7 +278,7 @@ export const scenario: ScenarioConfig = {
         'Посмотреть <b>БЕСПЛАТНОЕ</b> обучение можно только в течении 24 часов - <b>потом материал исчезнет!</b>\n',
         '<a href="https://youtu.be/BXPiR3ArL74">👉 Смотреть на YouTube 👈</a>',
       ].join(''),
-      defaultDelayMinutes: 20 * 60,
+      defaultDelayMinutes: 2 * 60,
       buttons: [],
     },
 
@@ -291,7 +291,7 @@ export const scenario: ScenarioConfig = {
         '<blockquote>Не упусти это возможность!</blockquote>\n\n',
         '<a href="https://youtu.be/BXPiR3ArL74">👉 Смотреть на YouTube 👈</a>',
       ].join(''),
-      defaultDelayMinutes: 2 * 60,
+      defaultDelayMinutes: 20 * 60,
       buttons: [],
     },
 
