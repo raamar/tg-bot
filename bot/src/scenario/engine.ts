@@ -18,7 +18,7 @@ const MOSCOW_TZ = 'Europe/Moscow'
 
 // dev-обёртка текста: префикс с мета-информацией
 function withDevMeta(stepId: StepId, text: string): string {
-  // if (true) return text
+  if (true) return text
 
   const now = new Date()
   const formatted = now.toLocaleString('ru-RU', {
