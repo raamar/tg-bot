@@ -136,21 +136,21 @@ export const scenario: ScenarioConfig = {
         [
           {
             kind: 'pay_url',
-            text: ' 👉 Купить за 9.990₽ (РФ Карта)👈 ',
+            text: ' 👉 Купить за 9.990₽ (РФ Карта) 👈 ',
             offerKey: 'main_full_price',
           },
         ],
         [
           {
             kind: 'url',
-            text: ' 👉 Купить за 9.990₽ (Не РФ Карта)👈',
+            text: ' 👉 Купить за 9.990₽ (Не РФ Карта) 👈',
             url: 'https://t.me/m/XGDbStMDNjYy',
           },
         ],
         [
           {
             kind: 'url',
-            text: ' 👉 Купить за 9.990₽ (Крипта)👈',
+            text: ' 👉 Купить за 9.990₽ (Крипта) 👈',
             url: 'https://t.me/m/DckHQcUiYTU6',
           },
         ],
@@ -279,15 +279,7 @@ export const scenario: ScenarioConfig = {
         '<a href="https://youtu.be/BXPiR3ArL74">👉 Смотреть на YouTube 👈</a>',
       ].join(''),
       defaultDelayMinutes: 20 * 60,
-      buttons: [
-        [
-          {
-            kind: 'step',
-            text: '✅ Я посмотрел ✅',
-            stepId: '1763357456249',
-          },
-        ],
-      ],
+      buttons: [],
     },
 
     '1763357825473': {
@@ -300,15 +292,7 @@ export const scenario: ScenarioConfig = {
         '<a href="https://youtu.be/BXPiR3ArL74">👉 Смотреть на YouTube 👈</a>',
       ].join(''),
       defaultDelayMinutes: 2 * 60,
-      buttons: [
-        [
-          {
-            kind: 'step',
-            text: '✅ Я посмотрел ✅',
-            stepId: '1763357456249',
-          },
-        ],
-      ],
+      buttons: [],
     },
 
     '1763357850855': {
@@ -694,15 +678,7 @@ export const scenario: ScenarioConfig = {
         '<i>А ведь мы предупреждали...</i>\n',
       ].join(''),
       defaultDelayMinutes: 96 * 60,
-      buttons: [
-        [
-          {
-            kind: 'offer',
-            text: '👉 Получить гайд 👈',
-            offerKey: 'main_full_price',
-          },
-        ],
-      ],
+      buttons: [],
     },
 
     '1763358086160': {
@@ -869,15 +845,7 @@ export const scenario: ScenarioConfig = {
         '<blockquote>💸 Гайд снова стоит 10.000₽</blockquote>\n\n',
         '<i>А ведь мы снова предупреждали...</i>\n',
       ].join(''),
-      buttons: [
-        [
-          {
-            kind: 'offer',
-            text: '👉 Получить гайд 👈',
-            offerKey: 'main_full_price',
-          },
-        ],
-      ],
+      buttons: [],
       defaultDelayMinutes: 2 * 60,
     },
 

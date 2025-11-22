@@ -75,14 +75,9 @@ async function sendAgreementAndNotifyAdmins(
 
     // Уведомление админам
     ...getAdmins().map((adminId) =>
-      bot.telegram.sendMessage(
-        adminId,
-        `${adminPrefix}\n` +
-          `👤 telegramId: ${user.telegramId}\n` +
-          `🆔 userId: ${user.id}\n` +
-          `💰 Сумма: ${amount.toFixed(2)} ${currency}`,
-        { parse_mode: 'HTML' }
-      )
+      bot.telegram.sendMessage(adminId, `${adminPrefix}\n` + `💰 Сумма: ${amount.toFixed(2)} ${currency}`, {
+        parse_mode: 'HTML',
+      })
     ),
   ])
 
@@ -107,7 +102,7 @@ async function sendAgreementAndNotifyAdmins(
  * 5) Отправляет пользователю пользовательское соглашение (AGREE).
  * 6) Шлёт уведомление админам.
  */
-export async function confirmPaymentAndNotify(telegramId: string, amount: number): Promise<void> {
+export async function confirmPaymentAndNotify(telegramId: string, amount: number, skipNotify: boolean): Promise<void> {
   const user = await prisma.user.findUnique({
     where: { telegramId },
     select: { id: true, telegramId: true },
@@ -158,6 +153,9 @@ export async function confirmPaymentAndNotify(telegramId: string, amount: number
   // 4. Гасим все напоминания и снимаем джобы из очереди
   await cancelRemindersForUser(user.id, now)
 
+  if (skipNotify) {
+    return
+  }
   // 5–6. Соглашение + уведомление админам
   await sendAgreementAndNotifyAdmins(user, amount, 'RUB', '🦾 Ручная оплата (/paid)!')
 }
@@ -236,5 +234,5 @@ export async function confirmPayment(paymentId: string): Promise<void> {
   const currency = updatedPayment.currency || 'RUB'
 
   // Сообщение пользователю + уведомление админам
-  await sendAgreementAndNotifyAdmins(user, amountNumber, currency, '🦾 Автоматическая оплата (webhook)!')
+  await sendAgreementAndNotifyAdmins(user, amountNumber, currency, '🦾 Купили гайд!')
 }
