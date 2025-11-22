@@ -1,5 +1,5 @@
 import type { Telegram } from 'telegraf' // если нужно для типов, можно и без этого
-const REQUIRED_CHAT_IDS = ['-1002961920513']
+const REQUIRED_CHAT_IDS = ['-1002961920513', '-1002951363889']
 
 export const isUserSubscribedToAllChats = async (telegram: Telegram, userId: number) => {
   const okStatuses = ['creator', 'administrator', 'member']
