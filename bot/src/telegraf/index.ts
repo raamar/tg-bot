@@ -230,7 +230,7 @@ bot.action(
           const isSubscribedNow = await isUserSubscribedToAllChats(ctx.telegram, Number(user.telegramId))
 
           if (IS_PROD && !isSubscribedNow) {
-            await ctx.reply('🚫 Сначала подпишись на канал(ы), а потом нажимай «Подписался».')
+            await ctx.reply('К сожалению, ты все ещё не подписался 🙏')
             return
           }
 
