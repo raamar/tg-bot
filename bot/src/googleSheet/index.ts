@@ -224,6 +224,10 @@ const start = async (): Promise<void> => {
   }, intervalMs)
 }
 
-start().catch((e) => {
-  console.error(e)
-})
+const IS_PROD = process.env.NODE_ENV === 'production'
+
+if (IS_PROD) {
+  start().catch((e) => {
+    console.error(e)
+  })
+}
