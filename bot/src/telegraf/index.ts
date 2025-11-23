@@ -21,7 +21,7 @@ import { DocumentContext, PhotoContext, TextContext } from '../types/admin'
 import { ensureWataPaymentLinkForOffer } from '../payments/ensureWataOfferPayment'
 import { actionsMessages } from '../config'
 import { inline_keyboard_generate } from '../helpers/inline_keyboard_generate'
-import { isUserSubscribedToAllChats } from '../helpers/isUserSubscribedToAllChats'
+import { hasJoinRequestsForAllRequiredChats } from '../helpers/hasJoinRequestsForAllRequiredChats'
 
 if (process.env.TELEGRAM_TOKEN === undefined) {
   throw new Error('TELEGRAM_TOKEN is not defined')
@@ -227,13 +227,14 @@ bot.action(
         await ctx.answerCbQuery().catch(() => {})
 
         if (action === 'CHECK_SUBSCRIPTION') {
-          const isSubscribedNow = await isUserSubscribedToAllChats(ctx.telegram, Number(user.telegramId))
+          const hasRequests = await hasJoinRequestsForAllRequiredChats(user.id)
 
-          if (IS_PROD && !isSubscribedNow) {
+          if (IS_PROD && !hasRequests) {
             await ctx.reply('К сожалению, ты все ещё не подписался 🙏')
             return
           }
 
+          // считаем, что юзер "подписался" в рамках сценария
           if (!user.subscribed) {
             await prisma.user.update({
               where: { id: user.id },
@@ -418,6 +419,43 @@ bot.on('message', (ctx, next) => {
     return adminActions.messages.photo(ctx as PhotoContext)
   }
   return next()
+})
+
+bot.on('chat_join_request', async (ctx) => {
+  const { chat, from } = ctx.update.chat_join_request
+  const chatId = String(chat.id)
+  const telegramId = String(from.id)
+
+  // на всякий случай – создать/обновить юзера, если его ещё нет
+  const user = await prisma.user.upsert({
+    where: { telegramId },
+    create: {
+      telegramId,
+      username: from.username,
+      firstName: from.first_name,
+      lastName: from.last_name,
+    },
+    update: {
+      username: from.username,
+      firstName: from.first_name,
+      lastName: from.last_name,
+    },
+  })
+
+  // просто сохраняем факт, что у юзера есть заявка в этот чат
+  await prisma.chatJoinRequest.upsert({
+    where: {
+      userId_chatId: {
+        userId: user.id,
+        chatId,
+      },
+    },
+    create: {
+      userId: user.id,
+      chatId,
+    },
+    update: {},
+  })
 })
 
 process.once('SIGINT', () => bot.stop('SIGINT'))
