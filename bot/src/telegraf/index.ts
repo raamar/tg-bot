@@ -225,11 +225,10 @@ bot.action(
       case 'SYSTEM': {
         const action = payload as SystemAction
         await ctx.answerCbQuery().catch(() => {})
-
         if (action === 'CHECK_SUBSCRIPTION') {
-          const hasRequests = await hasJoinRequestsForAllRequiredChats(user.id)
+          const isOk = await hasJoinRequestsForAllRequiredChats(ctx.telegram, Number(user.telegramId), user.id)
 
-          if (IS_PROD && !hasRequests) {
+          if (IS_PROD && !isOk) {
             await ctx.reply('К сожалению, ты все ещё не подписался 🙏')
             return
           }
