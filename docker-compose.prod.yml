@@ -37,10 +37,10 @@ services:
       - CLOUDPAYMENTS_API_SECRET=${CLOUDPAYMENTS_API_SECRET}
     labels:
       - 'traefik.enable=true'
-      - 'traefik.http.routers.bot-c-api.rule=Host(`${PUBLIC_DOMAIN}`) && PathPrefix(`/`)'
-      - 'traefik.http.routers.bot-c-api.entrypoints=websecure'
-      - 'traefik.http.routers.bot-c-api.tls.certresolver=le'
-      - 'traefik.http.services.bot-c-api.loadbalancer.server.port=3000'
+      - 'traefik.http.routers.bot-d-api.rule=Host(`${PUBLIC_DOMAIN}`) && PathPrefix(`/`)'
+      - 'traefik.http.routers.bot-d-api.entrypoints=websecure'
+      - 'traefik.http.routers.bot-d-api.tls.certresolver=le'
+      - 'traefik.http.services.bot-d-api.loadbalancer.server.port=3000'
       - 'traefik.docker.network=traefik_net'
     depends_on:
       - redis
@@ -111,12 +111,12 @@ services:
       - minio_data:/data
     labels:
       - 'traefik.enable=true'
-      - 'traefik.http.routers.bot-c-minio.rule=Host(`${PUBLIC_DOMAIN}`) && PathPrefix(`/media`)'
-      - 'traefik.http.routers.bot-c-minio.entrypoints=websecure'
-      - 'traefik.http.routers.bot-c-minio.tls.certresolver=le'
-      - 'traefik.http.services.bot-c-minio.loadbalancer.server.port=9000'
-      - 'traefik.http.middlewares.bot-c-minio-strip.stripprefix.prefixes=/media'
-      - 'traefik.http.routers.bot-c-minio.middlewares=bot-c-minio-strip'
+      - 'traefik.http.routers.bot-d-minio.rule=Host(`${PUBLIC_DOMAIN}`) && PathPrefix(`/media`)'
+      - 'traefik.http.routers.bot-d-minio.entrypoints=websecure'
+      - 'traefik.http.routers.bot-d-minio.tls.certresolver=le'
+      - 'traefik.http.services.bot-d-minio.loadbalancer.server.port=9000'
+      - 'traefik.http.middlewares.bot-d-minio-strip.stripprefix.prefixes=/media'
+      - 'traefik.http.routers.bot-d-minio.middlewares=bot-d-minio-strip'
       - 'traefik.docker.network=traefik_net'
     networks:
       - default
