@@ -426,20 +426,13 @@ bot.on('chat_join_request', async (ctx) => {
   const telegramId = String(from.id)
 
   // на всякий случай – создать/обновить юзера, если его ещё нет
-  const user = await prisma.user.upsert({
-    where: { telegramId },
-    create: {
-      telegramId,
-      username: from.username,
-      firstName: from.first_name,
-      lastName: from.last_name,
-    },
-    update: {
-      username: from.username,
-      firstName: from.first_name,
-      lastName: from.last_name,
-    },
+  const user = await prisma.user.findUnique({
+    where: { telegramId }
   })
+
+  if (!user) {
+    return
+  }
 
   // просто сохраняем факт, что у юзера есть заявка в этот чат
   await prisma.chatJoinRequest.upsert({
