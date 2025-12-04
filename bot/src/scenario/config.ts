@@ -325,7 +325,7 @@ export const scenario: ScenarioConfig = {
         'А ещё больше отзывов из нашего общего чата можете посмотреть здесь: @only_neuro_otzivi\n\n',
         '<blockquote>P.S. а так как отзывов становится всё больше и больше, это означает что в ближайшие дни я сделаю вторую волну увеличения стоимости гайда... Так что если ты планировал купить, советую поторопиться!</blockquote>\n',
       ].join(''),
-      defaultDelayMinutes: 24 * 60,
+      defaultDelayMinutes: 22 * 60,
       media: [
         {
           fileIdOrUrl: 'AgACAgIAAxkBAAJJAmkdL3Ht9ldn7Ol1eHlC5IZdNVgkAAIdDGsbNOboSL4zuygGoUuxAQADAgADeQADNgQ',
