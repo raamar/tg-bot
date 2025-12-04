@@ -634,6 +634,7 @@ export const scenario: ScenarioConfig = {
         '<blockquote>⚠️ Скидка действует только сегодня! ⚠️</blockquote>\n\n\n',
       ].join(''),
       defaultDelayMinutes: 24 * 60,
+      sendAtTimeOfDay: { hour: 12 },
       buttons: [
         [
           { kind: 'url', text: 'Что внутри гайда', url: 'https://telegra.ph/CHto-tebya-zhdyot-vnutri-Gajda-10-07' },
@@ -808,6 +809,7 @@ export const scenario: ScenarioConfig = {
         '<b>🤫 Советую в этот раз поторопиться...</b>\n',
       ].join(''),
       defaultDelayMinutes: 2 * 24 * 60,
+      sendAtTimeOfDay: { hour: 12 },
       buttons: [
         [
           { kind: 'url', text: 'Что внутри гайда', url: 'https://telegra.ph/CHto-tebya-zhdyot-vnutri-Gajda-10-07' },
