@@ -6,6 +6,7 @@ import { redis } from '../redis'
 import { prisma } from '../prisma'
 import { scenario } from '../scenario/config'
 import { StepId } from '../scenario/types'
+import { computePlannedAtWithTimeOfDay } from '../scenario/time'
 
 export interface ReminderJobPayload {
   reminderSubscriptionId: string
@@ -25,19 +26,30 @@ export const reminderQueue = new Queue<ReminderJobPayload>(REMINDER_QUEUE_NAME, 
 
 const IS_DEV = process.env.NODE_ENV !== 'production'
 
-function toDelayMs(delayMinutes: number): number {
-  const baseMs = delayMinutes * 60_000
+/**
+ * Преобразуем "реальную" задержку (в миллисекундах) в ту, что пойдёт в bull.
+ *
+ * В проде: используем реальный delayMs.
+ * В dev: сильно ускоряем время — как и раньше, через "delayMinutes -> ms".
+ */
+function toDelayMs(realDelayMs: number, totalDelayMinutes: number): number {
+  const baseMs = totalDelayMinutes * 60_000
 
   if (!IS_DEV) {
-    return baseMs
+    return realDelayMs
   }
 
-  const devMs = delayMinutes
-  const final = Math.max(500, devMs) // минимум 0.5 секунды
+  // В dev раньше логика была такая:
+  //   delayMinutes -> delayMinutes ms
+  // Здесь сохраняем ту же идею: используем суммарные delayMinutes
+  // как "ускоренное" время, с минимальным порогом.
+  const devMs = Math.max(500, totalDelayMinutes)
 
-  console.log(`[REMINDER] dev delay: original=${delayMinutes}min (${baseMs}ms) -> dev=${final}ms`)
+  console.log(
+    `[REMINDER] dev delay: totalMinutes=${totalDelayMinutes}min (base=${baseMs}ms, realPlanned=${realDelayMs}ms) -> dev=${devMs}ms`
+  )
 
-  return final
+  return devMs
 }
 
 /**
@@ -45,6 +57,15 @@ function toDelayMs(delayMinutes: number): number {
  *
  * ВАЖНО: reminders внутри одного шага считаем ЦЕПОЧКОЙ:
  * задержка накапливается по порядку (R1, потом R2 после R1 и т.д.).
+ *
+ * Теперь цепочка считается через "виртуальное время" cursorAt:
+ *   - стартуем от момента входа в step,
+ *   - для каждого binding:
+ *       cursorAt -> +thisDelay -> применяем sendAtTimeOfDay (если есть)
+ *       -> получаем scheduledAtReal,
+ *       -> cursorAt = scheduledAtReal.
+ *
+ * А уже потом считаем delay от "сейчас" (nowMs) до scheduledAtReal.
  */
 export async function scheduleRemindersForStep(
   userId: string,
@@ -54,7 +75,14 @@ export async function scheduleRemindersForStep(
   const step = scenario.steps[stepId]
   if (!step?.reminders || step.reminders.length === 0) return
 
-  const now = Date.now()
+  const nowMs = Date.now()
+  const nowDate = new Date(nowMs)
+
+  // cursorAt — "виртуальное время", от которого считается следующий reminder
+  let cursorAt = nowDate
+
+  // Для dev-логики нам всё ещё полезно знать суммарную задержку в минутах,
+  // чтобы сохранить прежнее поведение ускорения времени.
   let totalDelayMinutes = 0
 
   for (const binding of step.reminders) {
@@ -62,14 +90,29 @@ export async function scheduleRemindersForStep(
     if (!targetStep) continue
 
     const thisDelay = binding.delayMinutes ?? targetStep.defaultDelayMinutes
-
     if (!thisDelay || thisDelay <= 0) continue
 
-    // накапливаем задержку
+    // Для dev-логики накапливаем суммарную задержку
     totalDelayMinutes += thisDelay
 
-    const delayMs = toDelayMs(totalDelayMinutes)
-    const scheduledAt = new Date(now + delayMs)
+    // Считаем "реальное" планируемое время для этого reminder'а:
+    // - отталкиваемся от cursorAt,
+    // - добавляем thisDelay,
+    // - сдвигаемся на ближайшее нужное время суток (если sendAtTimeOfDay задан).
+    const scheduledAtReal = computePlannedAtWithTimeOfDay(cursorAt, thisDelay, targetStep.sendAtTimeOfDay)
+
+    // Следующий reminder будет считаться уже от этого момента.
+    cursorAt = scheduledAtReal
+
+    // Реальная задержка относительно МОМЕНТА ВХОДА в родительский шаг (nowMs).
+    let realDelayMs = scheduledAtReal.getTime() - nowMs
+    if (realDelayMs < 0) {
+      // На всякий случай: если вдруг получилось в прошлом — ставим минимальную задержку.
+      realDelayMs = 500
+    }
+
+    const delayMs = toDelayMs(realDelayMs, totalDelayMinutes)
+    const scheduledAt = new Date(nowMs + delayMs)
 
     const subscription = await prisma.reminderSubscription.create({
       data: {

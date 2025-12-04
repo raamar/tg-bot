@@ -90,6 +90,18 @@ export interface ReminderBinding {
 }
 
 /**
+ * Конфиг «время суток», когда можно отправлять шаг.
+ *
+ * Если указано — шаг / напоминание должен отправляться
+ * только в это время суток (по Europe/Moscow),
+ * но не раньше, чем пройдёт минимальная задержка (delayMinutes / defaultDelayMinutes).
+ */
+export interface TimeOfDayConfig {
+  hour: number // 0–23
+  minute?: number // 0–59, по умолчанию 0
+}
+
+/**
  * Базовая сущность — ШАГ сценария.
  */
 export interface StepConfig {
@@ -120,6 +132,22 @@ export interface StepConfig {
    * Шаг, который вешается глобально (типа твоих globalReminders)
    */
   isGlobalReminder?: boolean
+
+  /**
+   * Если указано — шаг (когда он отправляется как напоминание)
+   * будет доставлен только в это время суток (по MOSCOW_TZ),
+   * но не раньше, чем истечёт минимальная задержка.
+   *
+   * Пример:
+   *   defaultDelayMinutes = 7 * 60
+   *   sendAtTimeOfDay = { hour: 12 }
+   *
+   * Таймер стартовал в 20:00:
+   *   20:00 + 7ч = 03:00 (минимальное время готовности),
+   *   ближайшие 12:00 после 03:00 → 12:00 того же дня,
+   *   шаг отправится именно тогда.
+   */
+  sendAtTimeOfDay?: TimeOfDayConfig
 }
 
 export interface ScenarioConfig {
