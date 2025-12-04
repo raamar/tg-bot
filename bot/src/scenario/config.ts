@@ -568,7 +568,7 @@ export const scenario: ScenarioConfig = {
         '<blockquote>Потом всё, цена станет выше. Лови момент 😉</blockquote>\n\n',
         '<b>⚠️Через 24 часа станет дороже⚠️</b>\n',
       ].join(''),
-      defaultDelayMinutes: 168 * 60,
+      defaultDelayMinutes: 48 * 60,
       media: [
         {
           fileIdOrUrl: 'AgACAgIAAxkBAAJJLmkdOfYkpLXqfh_HyDYRaMZ9UlujAAI2DGsbNOboSFFjq4MeeLGLAQADAgADeAADNgQ',
@@ -606,7 +606,7 @@ export const scenario: ScenarioConfig = {
         '<i>Ты на скрине 1 или на скрине 2?</i>\n\n',
         '🤫 Ну а для тех кто выбирает второй вариант<b> - обучение по кнопке ниже! </b>\n',
       ].join(''),
-      defaultDelayMinutes: 24 * 60,
+      defaultDelayMinutes: 24 * 7 * 60,
       media: [
         {
           fileIdOrUrl: 'AgACAgIAAxkBAAJJVGkdO6xyEnpAYar7O25meyNEOiVlAAI6DGsbNOboSDCjVcqsIilLAQADAgADeQADNgQ',
@@ -633,7 +633,7 @@ export const scenario: ScenarioConfig = {
         '<b>😱 <u>И вся эта инфа всего за 4.990₽</u> 😱</b>\n\n',
         '<blockquote>⚠️ Скидка действует только сегодня! ⚠️</blockquote>\n\n\n',
       ].join(''),
-      defaultDelayMinutes: 168 * 60,
+      defaultDelayMinutes: 24 * 60,
       buttons: [
         [
           { kind: 'url', text: 'Что внутри гайда', url: 'https://telegra.ph/CHto-tebya-zhdyot-vnutri-Gajda-10-07' },
@@ -657,7 +657,7 @@ export const scenario: ScenarioConfig = {
         '💸 И гайд будет снова стоить 10.000₽\n\n',
         '<blockquote>⏳ Так что, если ты планировал купить, советую поторопиться, второй такой возможности уже не будет!</blockquote>\n',
       ].join(''),
-      defaultDelayMinutes: 3 * 60,
+      defaultDelayMinutes: 7 * 60,
     },
 
     '1763358057320': {
@@ -667,7 +667,7 @@ export const scenario: ScenarioConfig = {
         '💸 И гайд будет снова стоить 10.000₽\n\n',
         '<blockquote>⏳ Так что, если ты планировал купить, советую поторопиться, второй такой возможности уже не будет!</blockquote>\n',
       ].join(''),
-      defaultDelayMinutes: 2 * 60,
+      defaultDelayMinutes: 3 * 60,
     },
 
     '1763358068961': {
@@ -677,7 +677,7 @@ export const scenario: ScenarioConfig = {
         '<blockquote>💸 Гайд снова стоит 10.000₽</blockquote>\n\n',
         '<i>А ведь мы предупреждали...</i>\n',
       ].join(''),
-      defaultDelayMinutes: 96 * 60,
+      defaultDelayMinutes: 2 * 60,
       buttons: [],
     },
 
@@ -726,7 +726,7 @@ export const scenario: ScenarioConfig = {
         '<b>🚀 Просто повтори пошагово - и получишь результат.</b>\n',
         '📲 Забирай доступ к обрусение - по кнопке ниже!\n\n',
       ].join(''),
-      defaultDelayMinutes: 96 * 60,
+      defaultDelayMinutes: 4 * 24 * 60,
       buttons: [
         [
           {
@@ -764,7 +764,7 @@ export const scenario: ScenarioConfig = {
         '<blockquote>А если хочешь получить пошаговый план: с чего начать, какие нейросети выбрать и как это всё монетизировать?</blockquote>\n\n',
         '<b>🤫 Тогда забирай обучение по кнопке ниже!</b>\n',
       ].join(''),
-      defaultDelayMinutes: 96 * 60,
+      defaultDelayMinutes: 4 * 24 * 60,
       buttons: [
         [
           {
@@ -787,7 +787,7 @@ export const scenario: ScenarioConfig = {
           type: 'photo',
         },
       ],
-      defaultDelayMinutes: 48 * 60,
+      defaultDelayMinutes: 4 * 24 * 60,
       buttons: [
         [
           {
@@ -807,7 +807,7 @@ export const scenario: ScenarioConfig = {
         '<blockquote>⚡️ Поэтому снова <b>ТОЛЬКО ДО КОНЦА ДНЯ,</b> гайд будет стоить 5.000₽, вместо 10.000₽!</blockquote>\n\n',
         '<b>🤫 Советую в этот раз поторопиться...</b>\n',
       ].join(''),
-      defaultDelayMinutes: 168 * 60,
+      defaultDelayMinutes: 2 * 24 * 60,
       buttons: [
         [
           { kind: 'url', text: 'Что внутри гайда', url: 'https://telegra.ph/CHto-tebya-zhdyot-vnutri-Gajda-10-07' },
@@ -825,7 +825,7 @@ export const scenario: ScenarioConfig = {
         '💸 И гайд будет снова стоить 10.000₽\n\n',
         '<blockquote>⏳ Так что, если ты планировал купить, советую поторопиться, второй такой возможности уже не будет!</blockquote>\n',
       ].join(''),
-      defaultDelayMinutes: 3 * 60,
+      defaultDelayMinutes: 7 * 60,
     },
 
     '1763358148892': {
@@ -835,7 +835,7 @@ export const scenario: ScenarioConfig = {
         '💸 И гайд будет снова стоить 10.000₽\n\n',
         '<blockquote>⏳ Так что, если ты планировал купить, советую поторопиться, второй такой возможности уже не будет!</blockquote>\n',
       ].join(''),
-      defaultDelayMinutes: 2 * 60,
+      defaultDelayMinutes: 3 * 60,
     },
 
     '1763358159341': {
