@@ -133,7 +133,7 @@ function buildOfferKeyboard(instance: any, ruCardUrl?: string) {
 
 function buildOfferWindowText(instance: any): string {
   const amount = Number(instance.initialPrice || 0)
-  const priceText = `${amount.toFixed(2)}`
+  const priceText = `${amount.toFixed(0)}`
   const isShort = instance.offerKey.includes('main_last_chance') || instance.offerKey.includes('main_discount_50')
 
   if (isShort) {
@@ -427,7 +427,7 @@ bot.on('chat_join_request', async (ctx) => {
 
   // на всякий случай – создать/обновить юзера, если его ещё нет
   const user = await prisma.user.findUnique({
-    where: { telegramId }
+    where: { telegramId },
   })
 
   if (!user) {
