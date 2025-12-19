@@ -175,7 +175,7 @@ const adminActions: AdminActionHandlerMap = {
         return
       }
 
-      await ctx.reply('⏳ Командра отключена...')
+      await ctx.reply('⏳ Команда отключена...')
 
       // const users = await prisma.user.findMany({
       //   include: {
