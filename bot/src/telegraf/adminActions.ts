@@ -175,26 +175,26 @@ const adminActions: AdminActionHandlerMap = {
         return
       }
 
-      await ctx.reply('⏳ Экспорт данных, пожалуйста подождите...')
+      await ctx.reply('⏳ Командра отключена...')
 
-      const users = await prisma.user.findMany({
-        include: {
-          payments: true,
-          offerInstances: true,
-          reminderSubscriptions: true,
-          stepVisits: true,
-        },
-        orderBy: {
-          createdAt: 'asc',
-        },
-      })
+      // const users = await prisma.user.findMany({
+      //   include: {
+      //     payments: true,
+      //     offerInstances: true,
+      //     reminderSubscriptions: true,
+      //     stepVisits: true,
+      //   },
+      //   orderBy: {
+      //     createdAt: 'asc',
+      //   },
+      // })
 
-      const buffer = await generateUserExcelBuffer(users as any)
+      // const buffer = await generateUserExcelBuffer(users as any)
 
-      await ctx.replyWithDocument({
-        source: buffer,
-        filename: `users_export_${new Date().toISOString().slice(0, 10)}.xlsx`,
-      })
+      // await ctx.replyWithDocument({
+      //   source: buffer,
+      //   filename: `users_export_${new Date().toISOString().slice(0, 10)}.xlsx`,
+      // })
     },
 
     /**
