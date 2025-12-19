@@ -23,6 +23,7 @@ export type AdminActionHandlerMap = {
     export: CommandHandler
     stop: CommandHandler
     paid: CommandHandler
+    updateBlocked: CommandHandler
   }
 
   // Обработчики сообщений

@@ -13,6 +13,7 @@ import { reminderQueue } from '../reminders/scheduler'
 import { ReminderStatus } from '@prisma/client'
 import { confirmPaymentAndNotify } from '../payments/confirmPayment'
 import { exportUsersCsvToTempFile } from '../helpers/exportToCsv'
+import { blockCheckQueue } from '../blockCheck/scheduler'
 
 const getSession = async (ctx: { from?: { id: number } }): Promise<BroadcastSession | null> => {
   if (!ctx.from) return null
@@ -77,6 +78,57 @@ const startBroadcasting = async (ctx: TextContext | CallbackContext, session: Br
 
 const adminActions: AdminActionHandlerMap = {
   commands: {
+    updateBlocked: async (ctx) => {
+      if (!isAdmin(ctx.from?.id)) {
+        await ctx.reply('У вас нет прав для выполнения этой команды')
+        return
+      }
+
+      const adminId = ctx.from?.id
+      const sessionKey = `admin:${adminId}:blockcheck`
+
+      // если уже идёт — не запускаем второй раз
+      const runningRaw = await redis.get(`${sessionKey}:running`)
+      if (runningRaw === '1') {
+        await ctx.reply('⏳ Проверка уже запущена. Нажмите "Остановить" в сообщении прогресса.')
+        return
+      }
+
+      const total = await prisma.user.count()
+
+      const msg = await ctx.replyWithHTML(
+        [
+          `<b>Проверка блокировок</b>`,
+          `⏳ В процессе`,
+          ``,
+          `Всего: <b>${total}</b>`,
+          `Обработано: <b>0</b>`,
+          `Осталось: <b>${total}</b>`,
+          ``,
+          `Blocked: <b>0</b>`,
+          `Unblocked: <b>0</b>`,
+        ].join('\n'),
+        Markup.inlineKeyboard([[Markup.button.callback('🛑 Остановить', 'blockcheck:stop')]])
+      )
+
+      await redis.set(`${sessionKey}:running`, '1')
+      await redis.del(`${sessionKey}:stop`)
+
+      await blockCheckQueue.add(
+        `admin:${adminId}:${Date.now()}`,
+        {
+          mode: 'all',
+          sessionKey,
+          adminChatId: msg.chat.id,
+          adminMessageId: msg.message_id,
+        },
+        {
+          jobId: `blockcheck:admin:${adminId}`, // один активный на админа
+          removeOnComplete: true,
+          removeOnFail: false,
+        }
+      )
+    },
     broadcast: async (ctx) => {
       if (!isAdmin(ctx.from?.id)) {
         await ctx.reply('У вас нет прав для выполнения этой команды')
@@ -338,6 +390,21 @@ const adminActions: AdminActionHandlerMap = {
   },
 
   callbacks: {
+    'blockcheck:stop': async (ctx) => {
+      if (!isAdmin(ctx.from?.id)) {
+        await ctx.answerCbQuery('Нет прав').catch(() => {})
+        return
+      }
+
+      const adminId = ctx.from.id
+      const sessionKey = `admin:${adminId}:blockcheck`
+
+      await redis.set(`${sessionKey}:stop`, '1')
+      await redis.del(`${sessionKey}:running`)
+
+      await ctx.answerCbQuery('Останавливаю...').catch(() => {})
+      await ctx.reply('🛑 Остановка запрошена. Проверка завершится после текущего батча.')
+    },
     'broadcast:edit_text': async (ctx) => {
       const session = await getSession(ctx)
       if (!session || session.step !== 'MAIN_MENU') return

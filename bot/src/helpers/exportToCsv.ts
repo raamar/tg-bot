@@ -15,7 +15,7 @@ type ExportUsersCsvOptions = {
 }
 
 const CSV_DELIMITER = ';'
-const UTF8_BOM = '\ufeff' // чтобы Excel нормально открыл UTF-8
+const UTF8_BOM = '\ufeff'
 
 const csvEscape = (value: unknown): string => {
   const s = value == null ? '' : String(value)
@@ -42,6 +42,10 @@ type UserRow = Prisma.UserGetPayload<{
     refSource: true
     currentStepId: true
     agreed: true
+    blockedByUser: true
+    blockedAt: true
+    lastInteractionAt: true
+    blockReason: true
   }
 }>
 
@@ -53,12 +57,6 @@ type PendingPaymentRow = Prisma.PaymentGetPayload<{
   select: { userId: true; url: true; createdAt: true }
 }>
 
-/**
- * Стриминговый экспорт в CSV во временный файл.
- * Users читаем батчами по id.
- * "Последний PAID" и "последний PENDING" выбираем на уровне БД (orderBy),
- * а в JS берём первый для каждого userId.
- */
 export const exportUsersCsvToTempFile = async (
   opts: ExportUsersCsvOptions
 ): Promise<{ filePath: string; filename: string; rows: number }> => {
@@ -87,7 +85,15 @@ export const exportUsersCsvToTempFile = async (
       'Дата оплаты',
       'Время оплаты',
       'Согласие',
+      // ✅ new
+      'blockedByUser',
+      'blockedDate',
+      'blockedTime',
+      'lastInteractionDate',
+      'lastInteractionTime',
+      'blockReason',
     ]
+
     await writeChunk(out, UTF8_BOM + headers.map(csvEscape).join(CSV_DELIMITER) + '\n')
 
     let cursorId: UserRow['id'] | null = null
@@ -104,6 +110,10 @@ export const exportUsersCsvToTempFile = async (
           refSource: true,
           currentStepId: true,
           agreed: true,
+          blockedByUser: true,
+          blockedAt: true,
+          lastInteractionAt: true,
+          blockReason: true,
         },
         orderBy: { id: 'asc' },
         take: batchSize,
@@ -115,51 +125,29 @@ export const exportUsersCsvToTempFile = async (
       const userIds: UserRow['id'][] = users.map((u) => u.id)
 
       const paidPayments: PaidPaymentRow[] = await prisma.payment.findMany({
-        where: {
-          userId: { in: userIds },
-          status: PaymentStatus.PAID,
-        },
-        select: {
-          userId: true,
-          amount: true,
-          paidAt: true,
-          createdAt: true,
-        },
+        where: { userId: { in: userIds }, status: PaymentStatus.PAID },
+        select: { userId: true, amount: true, paidAt: true, createdAt: true },
         orderBy: [{ userId: 'asc' }, { paidAt: 'desc' }, { createdAt: 'desc' }],
       })
 
       const lastPaidByUserId = new Map<UserRow['id'], { amount: unknown; paidAt: Date | null }>()
       for (const p of paidPayments) {
-        if (!lastPaidByUserId.has(p.userId)) {
-          lastPaidByUserId.set(p.userId, { amount: p.amount, paidAt: p.paidAt })
-        }
+        if (!lastPaidByUserId.has(p.userId)) lastPaidByUserId.set(p.userId, { amount: p.amount, paidAt: p.paidAt })
       }
 
       const pendingPayments: PendingPaymentRow[] = await prisma.payment.findMany({
-        where: {
-          userId: { in: userIds },
-          status: PaymentStatus.PENDING,
-        },
-        select: {
-          userId: true,
-          url: true,
-          createdAt: true,
-        },
+        where: { userId: { in: userIds }, status: PaymentStatus.PENDING },
+        select: { userId: true, url: true, createdAt: true },
         orderBy: [{ userId: 'asc' }, { createdAt: 'desc' }],
       })
 
       const lastPendingByUserId = new Map<UserRow['id'], { url: string | null }>()
       for (const p of pendingPayments) {
-        if (!lastPendingByUserId.has(p.userId)) {
-          lastPendingByUserId.set(p.userId, { url: p.url })
-        }
+        if (!lastPendingByUserId.has(p.userId)) lastPendingByUserId.set(p.userId, { url: p.url })
       }
 
       for (const user of users) {
         const createdParts = formatDate(user.createdAt).split(' ')
-        const createdDate = createdParts[0] ?? ''
-        const createdTime = createdParts[1] ?? ''
-
         const stageTitle =
           (user.currentStepId && scenario.steps[user.currentStepId]?.systemTitle) || user.currentStepId || ''
 
@@ -168,22 +156,31 @@ export const exportUsersCsvToTempFile = async (
         const paidTime = paid?.paidAt ? formatDate(paid.paidAt).split(' ')[1] : ''
 
         const pending = lastPendingByUserId.get(user.id)
-        const payUrl = pending?.url || ''
+
+        const blockedParts = user.blockedAt ? formatDate(user.blockedAt).split(' ') : ['', '']
+        const lastIntParts = user.lastInteractionAt ? formatDate(user.lastInteractionAt).split(' ') : ['', '']
 
         const line = [
           user.telegramId,
           user.username || '',
           user.firstName || '',
           user.lastName || '',
-          createdDate,
-          createdTime,
+          createdParts[0] ?? '',
+          createdParts[1] ?? '',
           user.refSource || '',
           stageTitle,
           paid?.amount != null ? String(paid.amount) : '',
-          payUrl,
+          pending?.url || '',
           paidDate,
           paidTime,
           user.agreed ? 'Да' : 'Нет',
+          // ✅ new
+          user.blockedByUser ? 'Да' : 'Нет',
+          blockedParts[0] ?? '',
+          blockedParts[1] ?? '',
+          lastIntParts[0] ?? '',
+          lastIntParts[1] ?? '',
+          user.blockReason ?? '',
         ]
           .map(csvEscape)
           .join(CSV_DELIMITER)

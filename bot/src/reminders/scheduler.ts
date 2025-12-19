@@ -145,7 +145,6 @@ export async function scheduleRemindersForStep(
  * и удаляет соответствующие job из Bull.
  */
 export async function skipAllRemindersForUser(userId: string): Promise<void> {
-  // Находим все напоминания, которые ещё не отправлены
   const reminders = await prisma.reminderSubscription.findMany({
     where: {
       userId,
@@ -155,21 +154,24 @@ export async function skipAllRemindersForUser(userId: string): Promise<void> {
 
   if (reminders.length === 0) return
 
+  const now = new Date()
+
   for (const reminder of reminders) {
     try {
-      // 1. Удаляем job из очереди Bull
+      // 1) Удаляем job из Bull
       if (reminder.bullJobId) {
         try {
-          await reminderQueue.removeJobScheduler(`reminder:${reminder.id}`)
+          const job = await reminderQueue.getJob(reminder.bullJobId)
+          if (job) await job.remove()
         } catch (err) {
-          console.warn(`Не удалось удалить job ${reminder.id}`, err)
+          console.warn(`Не удалось удалить Bull job ${reminder.bullJobId}`, err)
         }
       }
 
-      // 2. Помечаем как SKIPPED
+      // 2) Помечаем как SKIPPED
       await prisma.reminderSubscription.update({
         where: { id: reminder.id },
-        data: { status: ReminderStatus.SKIPPED },
+        data: { status: ReminderStatus.SKIPPED, skippedAt: now },
       })
     } catch (err) {
       console.error(`Ошибка при SKIP напоминания ${reminder.id}`, err)

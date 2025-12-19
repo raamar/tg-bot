@@ -20,14 +20,18 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  /// Текущий шаг сценария (ID из TS-конфига)
   currentStepId   String?
-  /// Ключ сценария (если будет несколько сценариев, сейчас можно оставить null/один)
   currentScenario String?
 
   paid       Boolean @default(false)
   subscribed Boolean @default(false)
   agreed     Boolean @default(false)
+
+  // ✅ блокировки / активность
+  blockedByUser     Boolean   @default(false)
+  blockedAt         DateTime?
+  blockReason       String?
+  lastInteractionAt DateTime?
 
   payments              Payment[]
   offerInstances        OfferInstance[]

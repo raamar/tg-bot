@@ -23,6 +23,11 @@ import { actionsMessages } from '../config'
 import { inline_keyboard_generate } from '../helpers/inline_keyboard_generate'
 import { hasJoinRequestsForAllRequiredChats } from '../helpers/hasJoinRequestsForAllRequiredChats'
 
+import { getTelegramBlockInfo } from '../helpers/telegramBlock'
+import { touchUserInteractionByTelegramId } from '../helpers/userInteraction'
+import { initBlockCheckScheduler } from '../blockCheck/scheduler'
+import '../blockCheck/worker'
+
 if (process.env.TELEGRAM_TOKEN === undefined) {
   throw new Error('TELEGRAM_TOKEN is not defined')
 }
@@ -44,6 +49,41 @@ const throttler = telegrafThrottler({
 })
 
 bot.use(throttler)
+
+const originalCallApi = (bot.telegram as any).callApi.bind(bot.telegram)
+
+;(bot.telegram as any).callApi = async (method: string, payload: any, ...rest: any[]) => {
+  try {
+    return await originalCallApi(method, payload, ...rest)
+  } catch (e) {
+    const info = getTelegramBlockInfo(e)
+    if (info.isBlocked) {
+      const chatIdRaw = payload?.chat_id
+      const chatIdStr = chatIdRaw != null ? String(chatIdRaw) : ''
+
+      // не трогаем группы/каналы (chat_id отрицательные)
+      const chatIdNum = Number(chatIdStr)
+      const isUserChat = Number.isFinite(chatIdNum) && chatIdNum > 0
+
+      if (isUserChat) {
+        try {
+          await prisma.user.updateMany({
+            where: { telegramId: chatIdStr },
+            data: {
+              blockedByUser: true,
+              blockedAt: new Date(),
+              blockReason: info.reason ?? 'Blocked',
+            },
+          })
+        } catch (dbErr) {
+          console.warn('Не удалось пометить blockedByUser:', dbErr)
+        }
+      }
+    }
+
+    throw e
+  }
+}
 
 const telegramWorker = new Worker<Update>(
   'telegram',
@@ -168,11 +208,19 @@ bot.start(
         firstName: first_name,
         lastName: last_name,
         refSource: ref || undefined,
+        blockedByUser: false,
+        blockedAt: null,
+        blockReason: null,
+        lastInteractionAt: new Date(),
       },
       update: {
         username,
         firstName: first_name,
         lastName: last_name,
+        blockedByUser: false,
+        blockedAt: null,
+        blockReason: null,
+        lastInteractionAt: new Date(),
       },
     })
 
@@ -187,6 +235,7 @@ bot.start(
 bot.action(
   /^SCN:/,
   withErrorHandling(async (ctx) => {
+    await touchUserInteractionByTelegramId(String(ctx.from.id)).catch(() => {})
     const cb: any = ctx.callbackQuery
 
     if (!cb || typeof cb.data !== 'string') {
@@ -359,6 +408,7 @@ bot.action(
 bot.action(
   'HAPPY_END',
   withErrorHandling(async (ctx) => {
+    await touchUserInteractionByTelegramId(String(ctx.from.id)).catch(() => {})
     const telegramId = String(ctx.from.id)
 
     const user = await prisma.user.findUnique({
@@ -403,9 +453,13 @@ bot.command('broadcast', adminActions.commands.broadcast)
 bot.command('export', adminActions.commands.export)
 bot.command('stop', adminActions.commands.stop)
 bot.command('paid', adminActions.commands.paid)
+bot.command('updateBlocked', adminActions.commands.updateBlocked)
 
 // обработка обычных сообщений для админских штук
-bot.on('message', (ctx, next) => {
+bot.on('message', async (ctx, next) => {
+  if (ctx.from?.id) {
+    await touchUserInteractionByTelegramId(String(ctx.from.id)).catch(() => {})
+  }
   const msg: any = ctx.message
 
   if (msg && typeof msg.text === 'string') {
@@ -417,6 +471,7 @@ bot.on('message', (ctx, next) => {
   if (msg && msg.photo) {
     return adminActions.messages.photo(ctx as PhotoContext)
   }
+
   return next()
 })
 
@@ -449,6 +504,10 @@ bot.on('chat_join_request', async (ctx) => {
     update: {},
   })
 })
+
+if (IS_PROD) {
+  initBlockCheckScheduler().catch((e) => console.error('BlockCheck scheduler init error:', e))
+}
 
 process.once('SIGINT', () => bot.stop('SIGINT'))
 process.once('SIGTERM', () => bot.stop('SIGTERM'))

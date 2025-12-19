@@ -1,3 +1,5 @@
+// bot/src/googleSheet/index.ts
+
 import { type sheets_v4 } from '@googleapis/sheets'
 import { prisma } from '../prisma'
 import { createSheetsClient } from './sheetsAuth'
@@ -26,7 +28,7 @@ const MAX_CELLS_PER_SPREADSHEET = 10_000_000
 const SHRINK_GRID_TO_FIT = true
 
 // =====================
-// ШАПКА (как в Excel-выгрузке)
+// ШАПКА (как в CSV/Excel-выгрузке)
 // =====================
 
 const HEADERS = [
@@ -43,6 +45,13 @@ const HEADERS = [
   'Дата оплаты',
   'Время оплаты',
   'Согласие',
+  // ✅ blocked fields
+  'blockedByUser',
+  'blockedDate',
+  'blockedTime',
+  'lastInteractionDate',
+  'lastInteractionTime',
+  'blockReason',
 ] as const
 
 type RowTuple = [
@@ -58,7 +67,14 @@ type RowTuple = [
   string, // Ссылка для оплаты
   string, // Дата оплаты
   string, // Время оплаты
-  string // Согласие
+  string, // Согласие
+  // blocked fields
+  string, // blockedByUser (Да/Нет)
+  string, // blockedDate
+  string, // blockedTime
+  string, // lastInteractionDate
+  string, // lastInteractionTime
+  string // blockReason
 ]
 
 // =====================
@@ -81,7 +97,6 @@ const backoff = async <T>(fn: () => Promise<T>, attempt = 0): Promise<T> => {
     return await fn()
   } catch (e) {
     const status = getStatusCode(e)
-    // +408 иногда прилетает как "Request Timeout"
     if (status && [408, 413, 429, 500, 502, 503, 504].includes(status) && attempt < 6) {
       const base = Math.min(64, 2 ** attempt)
       const jitter = Math.floor(Math.random() * 1000)
@@ -260,6 +275,10 @@ type UserRow = Prisma.UserGetPayload<{
     refSource: true
     currentStepId: true
     agreed: true
+    blockedByUser: true
+    blockedAt: true
+    lastInteractionAt: true
+    blockReason: true
   }
 }>
 
@@ -287,6 +306,9 @@ const usersBatchToRows = (
     const systemTitle = scenario.steps[currentStepId]?.systemTitle
     const stageCell = systemTitle || String(currentStepId || '')
 
+    const blockedParts = u.blockedAt ? formatDate(u.blockedAt).split(' ') : ['', '']
+    const lastIntParts = u.lastInteractionAt ? formatDate(u.lastInteractionAt).split(' ') : ['', '']
+
     return [
       String(u.telegramId ?? ''),
       u.username ?? '',
@@ -301,6 +323,13 @@ const usersBatchToRows = (
       paidParts[0],
       paidParts[1],
       u.agreed ? 'Да' : 'Нет',
+      // blocked fields
+      u.blockedByUser ? 'Да' : 'Нет',
+      blockedParts[0] ?? '',
+      blockedParts[1] ?? '',
+      lastIntParts[0] ?? '',
+      lastIntParts[1] ?? '',
+      u.blockReason ?? '',
     ]
   })
 }
@@ -317,7 +346,7 @@ export const replaceSheetWithUsers = async (client: sheets_v4.Sheets, spreadshee
   // 1) гарантируем размер grid
   await backoff(() => ensureSheetGrid(client, spreadsheetId, SHEET_NAME, rowsNeeded, colsNeeded))
 
-  // 2) чистим только нужный диапазон (а не целые колонки "A:M" на миллион строк)
+  // 2) чистим диапазон под фактический объём (не весь столбец A:M)
   const lastCol = colToA1(colsNeeded)
   const clearRange = `${qSheet(SHEET_NAME)}!A1:${lastCol}${rowsNeeded}`
   await backoff(() =>
@@ -360,6 +389,10 @@ export const replaceSheetWithUsers = async (client: sheets_v4.Sheets, spreadshee
         refSource: true,
         currentStepId: true,
         agreed: true,
+        blockedByUser: true,
+        blockedAt: true,
+        lastInteractionAt: true,
+        blockReason: true,
       },
       orderBy: { id: 'asc' },
       take: batchSize,
@@ -370,19 +403,9 @@ export const replaceSheetWithUsers = async (client: sheets_v4.Sheets, spreadshee
 
     const userIds: UserRow['id'][] = users.map((u) => u.id)
 
-    // Последний PAID: порядок в БД по userId asc, paidAt desc, createdAt desc,
-    // а в JS берём первый для каждого userId.
     const paidPayments: PaidPaymentRow[] = await prisma.payment.findMany({
-      where: {
-        userId: { in: userIds },
-        status: PaymentStatus.PAID,
-      },
-      select: {
-        userId: true,
-        amount: true,
-        paidAt: true,
-        createdAt: true,
-      },
+      where: { userId: { in: userIds }, status: PaymentStatus.PAID },
+      select: { userId: true, amount: true, paidAt: true, createdAt: true },
       orderBy: [{ userId: 'asc' }, { paidAt: 'desc' }, { createdAt: 'desc' }],
     })
 
@@ -393,17 +416,9 @@ export const replaceSheetWithUsers = async (client: sheets_v4.Sheets, spreadshee
       }
     }
 
-    // Последний PENDING: порядок в БД по userId asc, createdAt desc.
     const pendingPayments: PendingPaymentRow[] = await prisma.payment.findMany({
-      where: {
-        userId: { in: userIds },
-        status: PaymentStatus.PENDING,
-      },
-      select: {
-        userId: true,
-        url: true,
-        createdAt: true,
-      },
+      where: { userId: { in: userIds }, status: PaymentStatus.PENDING },
+      select: { userId: true, url: true, createdAt: true },
       orderBy: [{ userId: 'asc' }, { createdAt: 'desc' }],
     })
 
@@ -437,7 +452,6 @@ export const replaceSheetWithUsers = async (client: sheets_v4.Sheets, spreadshee
     } catch (e) {
       const status = getStatusCode(e)
 
-      // На payload/invalid ошибки — уменьшаем batch и пробуем снова
       if ((status === 400 || status === 413) && batchSize > MIN_BATCH) {
         batchSize = Math.max(MIN_BATCH, Math.floor(batchSize / 2))
         continue
