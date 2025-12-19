@@ -13,6 +13,7 @@ import { generateUserExcelBuffer } from '../helpers/exportToExcel'
 import { reminderQueue } from '../reminders/scheduler'
 import { ReminderStatus } from '@prisma/client'
 import { confirmPaymentAndNotify } from '../payments/confirmPayment'
+import { exportUsersCsvToTempFile } from '../helpers/exportToCsv'
 
 const getSession = async (ctx: { from?: { id: number } }): Promise<BroadcastSession | null> => {
   if (!ctx.from) return null
@@ -175,26 +176,29 @@ const adminActions: AdminActionHandlerMap = {
         return
       }
 
-      await ctx.reply('⏳ Команда отключена...')
+      await ctx.reply('⏳ Экспортирую данные в CSV...')
 
-      // const users = await prisma.user.findMany({
-      //   include: {
-      //     payments: true,
-      //     offerInstances: true,
-      //     reminderSubscriptions: true,
-      //     stepVisits: true,
-      //   },
-      //   orderBy: {
-      //     createdAt: 'asc',
-      //   },
-      // })
+      try {
+        // batchSize можно подстроить (1000–5000 обычно норм)
+        const { filePath, filename, rows } = await exportUsersCsvToTempFile({
+          prisma,
+          batchSize: 2000,
+        })
 
-      // const buffer = await generateUserExcelBuffer(users as any)
+        await ctx.replyWithDocument({
+          source: filePath, // путь — Telegraf сам прочитает файл
+          filename,
+        })
 
-      // await ctx.replyWithDocument({
-      //   source: buffer,
-      //   filename: `users_export_${new Date().toISOString().slice(0, 10)}.xlsx`,
-      // })
+        await ctx.reply(`✅ Готово. Строк: ${rows}`)
+      } catch (err: any) {
+        console.error('Ошибка при /export:', err)
+        const message = err instanceof Error ? err.message : String(err)
+        await ctx.reply(`❌ Ошибка при экспорте: ${message}`)
+      } finally {
+        // опционально можно удалить/отредактировать progressMsg — но не обязательно
+        // (если хочешь — скажи, добавлю editMessageText)
+      }
     },
 
     /**
