@@ -111,7 +111,7 @@ export const scenario: ScenarioConfig = {
         [
           {
             kind: 'step',
-            text: ' ✅ Я посмотрел ✅ ',
+            text: ' ✅ Я посмотрел и хочу гайд ✅ ',
             stepId: '1763357456249',
           },
         ],
@@ -148,7 +148,7 @@ export const scenario: ScenarioConfig = {
         [
           {
             kind: 'step',
-            text: ' ✅ Я посмотрел ✅ ',
+            text: ' ✅ Я посмотрел и хочу гайд ✅ ',
             stepId: '1763357456249',
           },
         ],
@@ -333,7 +333,15 @@ export const scenario: ScenarioConfig = {
         '<a href="https://youtu.be/BXPiR3ArL74">👉 Смотреть на YouTube 👈</a>',
       ].join(''),
       defaultDelayMinutes: 2 * 60,
-      buttons: [],
+      buttons: [
+        [
+          {
+            kind: 'step',
+            text: ' ✅ Я посмотрел и хочу гайд ✅ ',
+            stepId: '1763357456249',
+          },
+        ],
+      ],
     },
 
     '1763357825473': {
@@ -346,7 +354,15 @@ export const scenario: ScenarioConfig = {
         '<a href="https://youtu.be/BXPiR3ArL74">👉 Смотреть на YouTube 👈</a>',
       ].join(''),
       defaultDelayMinutes: 20 * 60,
-      buttons: [],
+      buttons: [
+        [
+          {
+            kind: 'step',
+            text: ' ✅ Я посмотрел и хочу гайд ✅ ',
+            stepId: '1763357456249',
+          },
+        ],
+      ],
     },
 
     '1763357850855': {
@@ -418,9 +434,7 @@ export const scenario: ScenarioConfig = {
         '<b>🤫 Тогда забирай обучение по кнопке ниже!</b>\n',
       ].join(''),
       defaultDelayMinutes: 24 * 60,
-      media: [
-        { fileIdOrUrl: 'https://neuro-bot-a.coderomil.ru/media/bot/2.mp4', type: 'video' },
-      ],
+      media: [{ fileIdOrUrl: 'https://neuro-bot-a.coderomil.ru/media/bot/2.mp4', type: 'video' }],
       buttons: [
         [
           {
