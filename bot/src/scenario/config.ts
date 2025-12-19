@@ -382,7 +382,7 @@ export const scenario: ScenarioConfig = {
       defaultDelayMinutes: 22 * 60,
       media: [
         {
-          fileIdOrUrl: 'AgACAgIAAxkBAAJJAmkdL3Ht9ldn7Ol1eHlC5IZdNVgkAAIdDGsbNOboSL4zuygGoUuxAQADAgADeQADNgQ',
+          fileIdOrUrl: 'https://neuro-bot-a.coderomil.ru/media/bot/1.webp',
           type: 'photo',
         },
       ],
@@ -419,7 +419,7 @@ export const scenario: ScenarioConfig = {
       ].join(''),
       defaultDelayMinutes: 24 * 60,
       media: [
-        { fileIdOrUrl: 'BAACAgIAAxkBAAJLdWkdTjzwegwBlO4Dwq3BYebLvHC2AALYgAACNOboSA_J-DAPzMMWNgQ', type: 'video' },
+        { fileIdOrUrl: 'https://neuro-bot-a.coderomil.ru/media/bot/2.mp4', type: 'video' },
       ],
       buttons: [
         [
@@ -447,11 +447,11 @@ export const scenario: ScenarioConfig = {
       defaultDelayMinutes: 24 * 60,
       media: [
         {
-          fileIdOrUrl: 'AgACAgIAAxkBAAJOUGkhCtXWQpMai7e9JIGcs-EgILwtAAKHC2sbkFUJSZBzZYnDzlhXAQADAgADeAADNgQ',
+          fileIdOrUrl: 'https://neuro-bot-a.coderomil.ru/media/bot/3.webp',
           type: 'photo',
         },
         {
-          fileIdOrUrl: 'BAACAgIAAxkBAAJOUWkhCv9NpM3taKTX3aoxpIm98GE7AAJ4hQACS3uJSPHSVaV3dnZ6NgQ',
+          fileIdOrUrl: 'https://neuro-bot-a.coderomil.ru/media/bot/4.mp4',
           type: 'video',
         },
       ],
@@ -476,27 +476,27 @@ export const scenario: ScenarioConfig = {
       defaultDelayMinutes: 48 * 60,
       media: [
         {
-          fileIdOrUrl: 'AgACAgIAAxkBAAJOUmkhC2_BZgVbTITFTmJ-GssyAAFA2QACigtrG5BVCUmbWM3zyJEX1wEAAwIAA3kAAzYE',
+          fileIdOrUrl: 'https://neuro-bot-a.coderomil.ru/media/bot/5.webp',
           type: 'photo',
         },
         {
-          fileIdOrUrl: 'AgACAgIAAxkBAAJOU2khC5U6J_2KRyFTKpvWLJdS-qsBAAKNC2sbkFUJSTqL9D8loX42AQADAgADeQADNgQ',
+          fileIdOrUrl: 'https://neuro-bot-a.coderomil.ru/media/bot/6.webp',
           type: 'photo',
         },
         {
-          fileIdOrUrl: 'AgACAgIAAxkBAAJOVWkhC7hXR3ZITYcbh9rN9J3KpddoAAKPC2sbkFUJSQ0eUQuOqpr-AQADAgADeQADNgQ',
+          fileIdOrUrl: 'https://neuro-bot-a.coderomil.ru/media/bot/7.webp',
           type: 'photo',
         },
         {
-          fileIdOrUrl: 'AgACAgIAAxkBAAJOVmkhC8MjE4rSvfHR7a48M2Mbr56MAAKQC2sbkFUJST3wsEx1E7IzAQADAgADeQADNgQ',
+          fileIdOrUrl: 'https://neuro-bot-a.coderomil.ru/media/bot/8.webp',
           type: 'photo',
         },
         {
-          fileIdOrUrl: 'AgACAgIAAxkBAAJOV2khC9EigghjdFKyqg_iwHpskL0LAAKRC2sbkFUJSWB0Mikm9Oq6AQADAgADeQADNgQ',
+          fileIdOrUrl: 'https://neuro-bot-a.coderomil.ru/media/bot/9.webp',
           type: 'photo',
         },
         {
-          fileIdOrUrl: 'AgACAgIAAxkBAAJOWGkhC9wj3sULspOhiBqrvIlrayq6AAKSC2sbkFUJSYjAtDw81ObrAQADAgADeQADNgQ',
+          fileIdOrUrl: 'https://neuro-bot-a.coderomil.ru/media/bot/10.webp',
           type: 'photo',
         },
       ],
@@ -530,7 +530,7 @@ export const scenario: ScenarioConfig = {
       defaultDelayMinutes: 48 * 60,
       media: [
         {
-          fileIdOrUrl: 'BAACAgIAAxkBAAJKFGkdQtS86od9Q-oS7VQyJfDtjaAoAAKMgAACNOboSGjhzN5xLfv2NgQ',
+          fileIdOrUrl: 'https://neuro-bot-a.coderomil.ru/media/bot/11.mp4',
           type: 'video',
         },
       ],
@@ -565,7 +565,7 @@ export const scenario: ScenarioConfig = {
       defaultDelayMinutes: 48 * 60,
       media: [
         {
-          fileIdOrUrl: 'AgACAgIAAxkBAAJJLWkdOc0FscRLMzBVyDW-24oET9bWAAI1DGsbNOboSG8JUjcU3EFDAQADAgADeQADNgQ',
+          fileIdOrUrl: 'https://neuro-bot-a.coderomil.ru/media/bot/12.webp',
           type: 'photo',
         },
       ],
@@ -625,7 +625,7 @@ export const scenario: ScenarioConfig = {
       defaultDelayMinutes: 48 * 60,
       media: [
         {
-          fileIdOrUrl: 'AgACAgIAAxkBAAJJLmkdOfYkpLXqfh_HyDYRaMZ9UlujAAI2DGsbNOboSFFjq4MeeLGLAQADAgADeAADNgQ',
+          fileIdOrUrl: 'https://neuro-bot-a.coderomil.ru/media/bot/13.webp',
           type: 'photo',
         },
       ],
@@ -663,7 +663,7 @@ export const scenario: ScenarioConfig = {
       defaultDelayMinutes: 24 * 7 * 60,
       media: [
         {
-          fileIdOrUrl: 'AgACAgIAAxkBAAJJVGkdO6xyEnpAYar7O25meyNEOiVlAAI6DGsbNOboSDCjVcqsIilLAQADAgADeQADNgQ',
+          fileIdOrUrl: 'https://neuro-bot-a.coderomil.ru/media/bot/14.webp',
           type: 'photo',
         },
       ],
@@ -838,7 +838,7 @@ export const scenario: ScenarioConfig = {
       ].join(''),
       media: [
         {
-          fileIdOrUrl: 'AgACAgIAAxkBAAJJAmkdL3Ht9ldn7Ol1eHlC5IZdNVgkAAIdDGsbNOboSL4zuygGoUuxAQADAgADeQADNgQ',
+          fileIdOrUrl: 'https://neuro-bot-a.coderomil.ru/media/bot/15.webp',
           type: 'photo',
         },
       ],
