@@ -115,7 +115,7 @@ export const exportUsersCsvToTempFile = async (
           lastInteractionAt: true,
           blockReason: true,
         },
-        orderBy: { id: 'asc' },
+        orderBy: { createdAt: 'asc' },
         take: batchSize,
         ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
       })

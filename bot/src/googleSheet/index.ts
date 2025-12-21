@@ -394,7 +394,7 @@ export const replaceSheetWithUsers = async (client: sheets_v4.Sheets, spreadshee
         lastInteractionAt: true,
         blockReason: true,
       },
-      orderBy: { id: 'asc' },
+      orderBy: { createdAt: 'asc' },
       take: batchSize,
       ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
     })
