@@ -165,6 +165,10 @@ function buildOfferKeyboard(instance: any, ruCardUrl?: string) {
   const rfUrl = ruCardUrl ?? RF_PAY_PLACEHOLDER_URL
 
   return Markup.inlineKeyboard([
+    [
+      Markup.button.url('Что внутри гайда', 'https://telegra.ph/CHto-tebya-zhdyot-vnutri-Gajda-10-07'),
+      Markup.button.url('Отзывы', 'https://t.me/only_neuro_otzivi'),
+    ],
     [Markup.button.url('Оплатить РФ картой', rfUrl)],
     [Markup.button.url('Оплатить не РФ картой', foreignCardUrl)],
     [Markup.button.url('Оплатить криптой', cryptoUrl)],
@@ -173,7 +177,7 @@ function buildOfferKeyboard(instance: any, ruCardUrl?: string) {
 
 function buildOfferWindowText(instance: any): string {
   const amount = Number(instance.initialPrice || 0)
-  const priceText = `${amount.toFixed(0)}`
+  const priceText = `${amount.toLocaleString('de-DE')}`
   const isShort = instance.offerKey.includes('main_last_chance') || instance.offerKey.includes('main_discount_50')
 
   if (isShort) {
