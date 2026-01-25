@@ -1,0 +1,9 @@
+packages:
+  - api
+  - bot
+  - packages/*
+onlyBuiltDependencies:
+  - '@prisma/client'
+  - '@prisma/engines'
+  - msgpackr-extract
+  - prisma

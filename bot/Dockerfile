@@ -1,34 +1,40 @@
 FROM node:20-slim AS builder
 
-WORKDIR /app
-
+WORKDIR /repo
 RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 RUN npm install -g pnpm
 
-COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY bot/package.json bot/package.json
+COPY packages/db/package.json packages/db/package.json
 
-COPY . .
+# ставим deps для bot и db
+RUN pnpm install --frozen-lockfile --filter @app/db... --filter ./bot...
 
-RUN pnpm db:generate
+COPY bot ./bot
+COPY packages ./packages
 
-ENV NODE_OPTIONS="--max-old-space-size=2048"
+# generate только на build (как ты и требовал)
+RUN pnpm --filter @app/db db:generate
 
-RUN pnpm build
+RUN pnpm --filter ./bot... build
+
+
 FROM node:20-slim
 
-WORKDIR /app
-
+WORKDIR /repo
 RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 RUN npm install -g pnpm
 
-COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile --prod
+# ✅ копируем root + bot + packages/db node_modules
+COPY --from=builder /repo/node_modules ./node_modules
+COPY --from=builder /repo/bot/node_modules ./bot/node_modules
+COPY --from=builder /repo/packages/db/node_modules ./packages/db/node_modules
 
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/entrypoint.sh ./entrypoint.sh
-COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /repo/packages ./packages
+COPY --from=builder /repo/bot/dist ./bot/dist
+COPY --from=builder /repo/bot/entrypoint.sh ./bot/entrypoint.sh
 
+WORKDIR /repo/bot
 RUN chmod +x ./entrypoint.sh
-
 CMD ["./entrypoint.sh"]

@@ -10,7 +10,7 @@ import { restoreHtmlFromEntities } from '../helpers/restoreHtmlFromEntities'
 import { isAdmin } from '../helpers/isAdmin'
 import { prisma } from '../prisma'
 import { reminderQueue } from '../reminders/scheduler'
-import { ReminderStatus } from '@prisma/client'
+import { ReminderStatus } from '@app/db'
 import { confirmPaymentAndNotify } from '../payments/confirmPayment'
 import { exportUsersCsvToTempFile } from '../helpers/exportToCsv'
 import { blockCheckQueue } from '../blockCheck/scheduler'
@@ -28,7 +28,7 @@ const updateSession = async (ctx: { from?: { id: number } }, session: BroadcastS
 
 const showMainMenu = async (
   ctx: TextContext | CallbackContext | PhotoContext,
-  session: BroadcastSession
+  session: BroadcastSession,
 ): Promise<void> => {
   const message = [
     `📊 <b>Рассылка</b>`,
@@ -108,7 +108,7 @@ const adminActions: AdminActionHandlerMap = {
           `Blocked: <b>0</b>`,
           `Unblocked: <b>0</b>`,
         ].join('\n'),
-        Markup.inlineKeyboard([[Markup.button.callback('🛑 Остановить', 'blockcheck:stop')]])
+        Markup.inlineKeyboard([[Markup.button.callback('🛑 Остановить', 'blockcheck:stop')]]),
       )
 
       await redis.set(`${sessionKey}:running`, '1')
@@ -126,7 +126,7 @@ const adminActions: AdminActionHandlerMap = {
           jobId: `blockcheck:admin:${adminId}`, // один активный на админа
           removeOnComplete: true,
           removeOnFail: false,
-        }
+        },
       )
     },
     broadcast: async (ctx) => {
@@ -142,7 +142,7 @@ const adminActions: AdminActionHandlerMap = {
         JSON.stringify({
           step: 'AWAIT_FILE',
           contacts: [],
-        } as BroadcastSession)
+        } as BroadcastSession),
       )
     },
 
@@ -201,7 +201,7 @@ const adminActions: AdminActionHandlerMap = {
             console.error('ОШИБКА ПРИ /stop (reminder cancel):', message)
             return Promise.reject(error)
           }
-        })
+        }),
       )
 
       // Чистим возможные ключи шагов/действий в redis (если ещё используются)
@@ -293,7 +293,7 @@ const adminActions: AdminActionHandlerMap = {
 
       if (!Number.isFinite(amount) || amount <= 0) {
         await ctx.reply(
-          'Сумма должна быть положительным числом.\nПримеры:\n' + '/paid 123456789 4990\n' + '/paid 123456789 4990.50'
+          'Сумма должна быть положительным числом.\nПримеры:\n' + '/paid 123456789 4990\n' + '/paid 123456789 4990.50',
         )
         return
       }
@@ -304,7 +304,7 @@ const adminActions: AdminActionHandlerMap = {
           `✅ Платёж подтверждён.\n` +
             `telegramId: ${telegramId}\n` +
             `Сумма: ${amount.toFixed(2)} ₽\n` +
-            `Все напоминания и офферы для пользователя отключены.`
+            `Все напоминания и офферы для пользователя отключены.`,
         )
       } catch (err: any) {
         console.error('Ошибка при ручном подтверждении оплаты через /paid:', err)

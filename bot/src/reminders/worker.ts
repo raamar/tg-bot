@@ -1,7 +1,7 @@
 // bot/src/reminders/worker.ts
 
 import { Job, Worker } from 'bullmq'
-import { ReminderStatus, StepVisitSource } from '@prisma/client'
+import { ReminderStatus, StepVisitSource } from '@app/db'
 import { redis } from '../redis'
 import { prisma } from '../prisma'
 import { ReminderJobPayload, REMINDER_QUEUE_NAME, scheduleRemindersForStep, skipAllRemindersForUser } from './scheduler'
@@ -97,7 +97,7 @@ export const reminderWorker = new Worker<ReminderJobPayload>(
   {
     connection: redis,
     concurrency: 100,
-  }
+  },
 )
 
 reminderWorker.on('failed', (job, err) => {

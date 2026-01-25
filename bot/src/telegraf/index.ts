@@ -13,7 +13,7 @@ import { scheduleRemindersForStep, skipAllRemindersForUser } from '../reminders/
 import { enterStepForUser } from '../scenario/engine'
 import { getLatestOfferInstance, ensureOfferInstanceStarted } from '../offers/engine'
 import { scheduleOfferMessageExpiration } from '../offers/scheduler'
-import { StepVisitSource, OfferStatus } from '@prisma/client'
+import { StepVisitSource, OfferStatus } from '@app/db'
 import { SystemAction, OfferKey } from '../scenario/types'
 
 import { adminActions } from './adminActions'
@@ -93,7 +93,7 @@ const telegramWorker = new Worker<Update>(
   {
     concurrency: 100,
     connection: redis,
-  }
+  },
 )
 
 telegramWorker.on('failed', async (job, err) => {
@@ -232,7 +232,7 @@ bot.start(
     await enterStepForUser(user.id, entryStepId, StepVisitSource.SYSTEM)
     await skipAllRemindersForUser(user.id)
     await scheduleRemindersForStep(user.id, entryStepId, 'default')
-  })
+  }),
 )
 
 // обработчик всех callback'ов сценария
@@ -303,9 +303,9 @@ bot.action(
         if (action === 'SHOW_CONTENTS') {
           await ctx.reply(
             new FmtString(
-              'Здесь будет отдельный шаг/материал с тем, <b>что именно внутри гайда</b>.\nПозже можно вынести в сценарий.'
+              'Здесь будет отдельный шаг/материал с тем, <b>что именно внутри гайда</b>.\nПозже можно вынести в сценарий.',
             ),
-            { parse_mode: 'HTML' }
+            { parse_mode: 'HTML' },
           )
           return
         }
@@ -406,7 +406,7 @@ bot.action(
         await ctx.answerCbQuery().catch(() => {})
         break
     }
-  })
+  }),
 )
 
 bot.action(
@@ -444,7 +444,7 @@ bot.action(
         inline_keyboard: inline_keyboard_generate(buttons),
       },
     })
-  })
+  }),
 )
 
 // ================== ADMIN HANDLERS ==================

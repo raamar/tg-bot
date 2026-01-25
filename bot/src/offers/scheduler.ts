@@ -1,7 +1,7 @@
 // bot/src/offers/scheduler.ts
 
 import { Queue } from 'bullmq'
-import { OfferInstance } from '@prisma/client'
+import { OfferInstance } from '@app/db'
 import { redis } from '../redis'
 import { prisma } from '../prisma'
 
@@ -32,7 +32,7 @@ export const offerExpireQueue = new Queue<OfferExpireJobPayload>(OFFER_EXPIRE_QU
 export async function scheduleOfferMessageExpiration(
   instance: OfferInstance,
   chatId: number,
-  messageId: number
+  messageId: number,
 ): Promise<void> {
   if (!instance.expiresAt) {
     // бессрочный оффер — ничего не планируем
@@ -62,7 +62,7 @@ export async function scheduleOfferMessageExpiration(
     },
     {
       delay: delayMs,
-    }
+    },
   )
 
   await prisma.offerInstance.update({

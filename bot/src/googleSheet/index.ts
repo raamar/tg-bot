@@ -5,7 +5,7 @@ import { prisma } from '../prisma'
 import { createSheetsClient } from './sheetsAuth'
 import { formatDate } from '../helpers/formatDate'
 import { scenario } from '../scenario/config'
-import { PaymentStatus, type Prisma } from '@prisma/client'
+import { PaymentStatus, type Prisma } from '@app/db'
 
 // =====================
 // НАСТРОЙКИ
@@ -74,7 +74,7 @@ type RowTuple = [
   string, // blockedTime
   string, // lastInteractionDate
   string, // lastInteractionTime
-  string // blockReason
+  string, // blockReason
 ]
 
 // =====================
@@ -142,7 +142,7 @@ const fetchSheetProps = async (client: sheets_v4.Sheets, spreadsheetId: string):
       spreadsheetId,
       fields: 'sheets.properties(sheetId,title,gridProperties(rowCount,columnCount))',
     },
-    { timeout: REQUEST_TIMEOUT_MS }
+    { timeout: REQUEST_TIMEOUT_MS },
   )
 
   const sheets =
@@ -165,7 +165,7 @@ const fetchSheetProps = async (client: sheets_v4.Sheets, spreadsheetId: string):
 const ensureSheetExists = async (
   client: sheets_v4.Sheets,
   spreadsheetId: string,
-  title: string
+  title: string,
 ): Promise<SheetProps> => {
   const meta1 = await fetchSheetProps(client, spreadsheetId)
   const found1 = meta1.sheets.find((s) => s.title === title)
@@ -190,7 +190,7 @@ const ensureSheetExists = async (
         ],
       },
     },
-    { timeout: REQUEST_TIMEOUT_MS }
+    { timeout: REQUEST_TIMEOUT_MS },
   )
 
   const meta2 = await fetchSheetProps(client, spreadsheetId)
@@ -204,7 +204,7 @@ const ensureSheetGrid = async (
   spreadsheetId: string,
   title: string,
   rowsNeeded: number,
-  colsNeeded: number
+  colsNeeded: number,
 ): Promise<SheetProps> => {
   const meta = await fetchSheetProps(client, spreadsheetId)
   const sheet = meta.sheets.find((s) => s.title === title) ?? (await ensureSheetExists(client, spreadsheetId, title))
@@ -227,7 +227,7 @@ const ensureSheetGrid = async (
         `Max allowed is ${MAX_CELLS_PER_SPREADSHEET.toLocaleString()} cells per spreadsheet.`,
         `Data rows needed: ${rowsNeeded.toLocaleString()}, columns: ${colsNeeded.toLocaleString()}.`,
         `Fix: reduce columns/rows, split into multiple spreadsheets, or store data outside Sheets (BigQuery/DB/CSV).`,
-      ].join(' ')
+      ].join(' '),
     )
   }
 
@@ -254,7 +254,7 @@ const ensureSheetGrid = async (
         ],
       },
     },
-    { timeout: REQUEST_TIMEOUT_MS }
+    { timeout: REQUEST_TIMEOUT_MS },
   )
 
   return { ...sheet, rowCount: targetRowCount, columnCount: targetColCount }
@@ -293,7 +293,7 @@ type PendingPaymentRow = Prisma.PaymentGetPayload<{
 const usersBatchToRows = (
   users: UserRow[],
   lastPaidByUserId: Map<UserRow['id'], { amount: unknown; paidAt: Date | null }>,
-  lastPendingByUserId: Map<UserRow['id'], { url: string | null }>
+  lastPendingByUserId: Map<UserRow['id'], { url: string | null }>,
 ): RowTuple[] => {
   return users.map((u) => {
     const paid = lastPaidByUserId.get(u.id)
@@ -355,8 +355,8 @@ export const replaceSheetWithUsers = async (client: sheets_v4.Sheets, spreadshee
         spreadsheetId,
         range: clearRange,
       },
-      { timeout: REQUEST_TIMEOUT_MS }
-    )
+      { timeout: REQUEST_TIMEOUT_MS },
+    ),
   )
 
   // 3) пишем шапку
@@ -368,8 +368,8 @@ export const replaceSheetWithUsers = async (client: sheets_v4.Sheets, spreadshee
         valueInputOption: VALUE_INPUT_OPTION,
         requestBody: { values: [HEADERS as unknown as string[]] },
       },
-      { timeout: REQUEST_TIMEOUT_MS }
-    )
+      { timeout: REQUEST_TIMEOUT_MS },
+    ),
   )
 
   // 4) пишем данные батчами из БД
@@ -441,7 +441,7 @@ export const replaceSheetWithUsers = async (client: sheets_v4.Sheets, spreadshee
           valueInputOption: VALUE_INPUT_OPTION,
           requestBody: { values: rows as unknown as string[][] },
         },
-        { timeout: REQUEST_TIMEOUT_MS }
+        { timeout: REQUEST_TIMEOUT_MS },
       )
     }
 

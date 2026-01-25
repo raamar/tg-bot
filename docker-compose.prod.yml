@@ -11,7 +11,6 @@ services:
       - --entrypoints.websecure.address=:443
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
-      # сеть, в которой Traefik ищет сервисы
       - --providers.docker.network=traefik_net
       - --certificatesresolvers.le.acme.httpchallenge=true
       - --certificatesresolvers.le.acme.httpchallenge.entrypoint=web
@@ -28,10 +27,10 @@ services:
 
   api:
     build:
-      context: ./api
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./api/Dockerfile
     environment:
-      - NODE_ENV=${NODE_ENV:-development}
+      - NODE_ENV=production
       - REDIS_URL=redis://redis:6379
       - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
       - CLOUDPAYMENTS_API_SECRET=${CLOUDPAYMENTS_API_SECRET}
@@ -54,14 +53,24 @@ services:
       - default
       - traefik_net
 
+  db-migrate:
+    build:
+      context: .
+      dockerfile: ./packages/db/Dockerfile.migrate
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    depends_on:
+      - db
+    networks:
+      - default
+
   bot:
     build:
-      context: ./bot
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./bot/Dockerfile
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - REDIS_URL=redis://redis:6379
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
       - TELEGRAM_WEBHOOK_URL=${TELEGRAM_WEBHOOK_URL}
       - TELEGRAM_STEPS_EXPIRE=${TELEGRAM_STEPS_EXPIRE:-3600}
@@ -76,6 +85,7 @@ services:
       - GOOGLE_SHEET_LIST_NAME=${GOOGLE_SHEET_LIST_NAME}
       - WATA_ACCESS_TOKEN=${WATA_ACCESS_TOKEN}
     depends_on:
+      - db-migrate
       - db
       - redis
     networks:

@@ -1,7 +1,7 @@
 // bot/src/reminders/scheduler.ts
 
 import { Queue } from 'bullmq'
-import { ReminderStatus } from '@prisma/client'
+import { ReminderStatus } from '@app/db'
 import { redis } from '../redis'
 import { prisma } from '../prisma'
 import { scenario } from '../scenario/config'
@@ -46,7 +46,7 @@ function toDelayMs(realDelayMs: number, totalDelayMinutes: number): number {
   const devMs = Math.max(500, totalDelayMinutes)
 
   console.log(
-    `[REMINDER] dev delay: totalMinutes=${totalDelayMinutes}min (base=${baseMs}ms, realPlanned=${realDelayMs}ms) -> dev=${devMs}ms`
+    `[REMINDER] dev delay: totalMinutes=${totalDelayMinutes}min (base=${baseMs}ms, realPlanned=${realDelayMs}ms) -> dev=${devMs}ms`,
   )
 
   return devMs
@@ -70,7 +70,7 @@ function toDelayMs(realDelayMs: number, totalDelayMinutes: number): number {
 export async function scheduleRemindersForStep(
   userId: string,
   stepId: StepId,
-  scenarioKey: string = 'default'
+  scenarioKey: string = 'default',
 ): Promise<void> {
   const step = scenario.steps[stepId]
   if (!step?.reminders || step.reminders.length === 0) return
@@ -130,7 +130,7 @@ export async function scheduleRemindersForStep(
       {
         delay: delayMs,
         jobId: `reminder:${subscription.id}`,
-      }
+      },
     )
 
     await prisma.reminderSubscription.update({

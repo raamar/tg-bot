@@ -1,11 +1,11 @@
 services:
   api:
     build:
-      context: ./api
-      dockerfile: Dockerfile.dev
+      context: .
+      dockerfile: ./api/Dockerfile.dev
     volumes:
-      - ./api:/app
-      - /app/node_modules
+      - ./api:/repo/api
+    working_dir: /repo/api
     ports:
       - '3000:3000'
     environment:
@@ -24,11 +24,11 @@ services:
 
   bot:
     build:
-      context: ./bot
-      dockerfile: Dockerfile.dev
+      context: .
+      dockerfile: ./bot/Dockerfile.dev
     volumes:
-      - ./bot:/app
-      - /app/node_modules
+      - ./:/repo
+    working_dir: /repo/bot
     depends_on:
       db:
         condition: service_healthy
@@ -51,6 +51,7 @@ services:
       - GOOGLE_SERVICE_ACCOUNT_JSON_BASE64=${GOOGLE_SERVICE_ACCOUNT_JSON_BASE64}
       - GOOGLE_SHEET_LIST_NAME=${GOOGLE_SHEET_LIST_NAME}
       - WATA_ACCESS_TOKEN=${WATA_ACCESS_TOKEN}
+
   db:
     image: postgres:15
     environment:

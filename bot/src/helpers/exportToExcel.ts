@@ -1,5 +1,5 @@
 import ExcelJS from 'exceljs'
-import { User, PaymentStatus } from '@prisma/client'
+import { User, PaymentStatus } from '@app/db'
 import { formatDate } from './formatDate'
 import { scenario } from '../scenario/config'
 
@@ -18,7 +18,8 @@ const pickLastPaid = <T extends { status: PaymentStatus; paidAt: Date | null; cr
   ps
     .filter((p) => p.status === 'PAID')
     .sort(
-      (a, b) => (b.paidAt?.getTime() ?? 0) - (a.paidAt?.getTime() ?? 0) || b.createdAt.getTime() - a.createdAt.getTime()
+      (a, b) =>
+        (b.paidAt?.getTime() ?? 0) - (a.paidAt?.getTime() ?? 0) || b.createdAt.getTime() - a.createdAt.getTime(),
     )[0]
 
 /** Самый актуальный инвойс: последний PENDING по createdAt */

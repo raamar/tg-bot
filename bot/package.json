@@ -17,15 +17,14 @@
   "license": "ISC",
   "packageManager": "pnpm@10.7.1",
   "dependencies": {
+    "@app/db": "workspace:*",
     "@googleapis/sheets": "^11.1.0",
-    "@prisma/client": "^6.12.0",
     "axios": "^1.11.0",
-    "bullmq": "^5.56.6",
+    "bullmq": "5.56.6",
     "date-fns-tz": "^3.2.0",
     "exceljs": "^4.4.0",
     "google-auth-library": "^10.2.1",
     "ioredis": "^5.6.1",
-    "prisma": "^6.12.0",
     "telegraf": "^4.16.3",
     "telegraf-throttler": "^0.6.0"
   },

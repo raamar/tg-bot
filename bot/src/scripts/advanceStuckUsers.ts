@@ -1,7 +1,7 @@
 import { prisma } from '../prisma'
 import { skipAllRemindersForUser, scheduleRemindersForStep } from '../reminders/scheduler'
 import { enterStepForUser } from '../scenario/engine'
-import { StepVisitSource } from '@prisma/client'
+import { StepVisitSource } from '@app/db'
 import fs from 'fs'
 import path from 'path'
 
@@ -58,7 +58,7 @@ class RateLimiter {
     const p = this.chain.then(task, task)
     this.chain = p.then(
       () => undefined,
-      () => undefined
+      () => undefined,
     )
     return p
   }
@@ -128,7 +128,7 @@ async function main() {
     const elapsedSec = Math.max(1, Math.floor((Date.now() - startedAt) / 1000))
     const speed = (processed / elapsedSec).toFixed(2)
     process.stdout.write(
-      `\rProgress ${processed}/${total} | ok=${ok} skipped=${skipped} failed=${failed} | speed=${speed}/s | errors=${errors.length}   `
+      `\rProgress ${processed}/${total} | ok=${ok} skipped=${skipped} failed=${failed} | speed=${speed}/s | errors=${errors.length}   `,
     )
   }
 
@@ -152,7 +152,7 @@ async function main() {
         prisma.user.findUnique({
           where: { id: r.id },
           select: { paid: true, currentStepId: true, updatedAt: true },
-        })
+        }),
       )
     } catch (e: any) {
       failed++
@@ -272,7 +272,7 @@ async function main() {
     console.log('Errors (preview up to 20):')
     for (const e of errors.slice(0, 20)) {
       console.log(
-        `- user=${e.userId} tg=${e.telegramId} step=${e.currentStepId} -> ${e.nextStepId} phase=${e.phase}: ${e.message}`
+        `- user=${e.userId} tg=${e.telegramId} step=${e.currentStepId} -> ${e.nextStepId} phase=${e.phase}: ${e.message}`,
       )
     }
     if (errors.length > 20) console.log(`...and ${errors.length - 20} more (see file).`)

@@ -1,6 +1,6 @@
 // bot/src/offers/engine.ts
 
-import { OfferStatus } from '@prisma/client'
+import { OfferStatus } from '@app/db'
 import { prisma } from '../prisma'
 import { offersConfig } from '../scenario/offers'
 import { OfferKey } from '../scenario/types'

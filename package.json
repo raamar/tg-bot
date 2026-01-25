@@ -1,0 +1,11 @@
+{
+  "name": "nogi-bot-monorepo",
+  "private": true,
+  "packageManager": "pnpm@10.7.1",
+  "scripts": {
+    "db:generate": "pnpm --filter @app/db db:generate",
+    "db:push": "pnpm --filter @app/db db:push",
+    "db:deploy": "pnpm --filter @app/db db:deploy",
+    "db:studio": "pnpm --filter @app/db studio"
+  }
+}

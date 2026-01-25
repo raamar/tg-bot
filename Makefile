@@ -21,8 +21,17 @@ down-hard:
 		echo "Операция отменена."; \
 	fi
 
-studio:
-	docker compose -f $(COMPOSE_FILE) exec bot npx prisma studio
-
 logs:
 	docker compose -f $(COMPOSE_FILE) logs -f --tail=100
+
+db-generate:
+	docker compose -f $(COMPOSE_FILE) exec bot pnpm --filter @app/db db:generate
+
+db-push:
+	docker compose -f $(COMPOSE_FILE) exec bot pnpm --filter @app/db db:push
+
+db-deploy:
+	docker compose -f $(COMPOSE_FILE) exec bot pnpm --filter @app/db db:deploy
+
+studio:
+	docker compose -f $(COMPOSE_FILE) exec bot pnpm --filter @app/db studio

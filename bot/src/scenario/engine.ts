@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto'
 // bot/src/scenario/engine.ts
 
 import { FmtString } from 'telegraf/format'
-import { OfferStatus, PaymentStatus, StepVisitSource } from '@prisma/client'
+import { OfferStatus, PaymentStatus, StepVisitSource } from '@app/db'
 import { prisma } from '../prisma'
 import { bot } from '../telegraf'
 import { scenario } from './config'
@@ -97,9 +97,9 @@ async function buildInlineKeyboard(step: StepConfig, userId?: string): Promise<I
                   url: link.url,
                 }
             }
-          })
-        )
-    )
+          }),
+        ),
+    ),
   )
 
   return { inline_keyboard }
@@ -178,8 +178,8 @@ export async function enterStepForUser(userId: string, stepId: StepId, source: S
               : ({
                   type: 'video',
                   media: m.fileIdOrUrl,
-                } as const)
-          )
+                } as const),
+          ),
         )
       }
 
@@ -280,7 +280,7 @@ export async function createOrUpdateActiveOfferInstance(userId: string, offerKey
 export async function enterStepByTelegramId(
   telegramId: string,
   stepId: StepId,
-  source: StepVisitSource
+  source: StepVisitSource,
 ): Promise<StepConfig | null> {
   const user = await prisma.user.findUnique({
     where: { telegramId },

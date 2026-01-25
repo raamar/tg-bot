@@ -55,11 +55,6 @@ coverage/
 dump.rdb
 appendonly.aof
 
-# === Optional ===
-# Exclude compiled TypeScript output
-**/*.js
-**/*.js.map
-
 letsencrypt/
 letsencrypt/*
 letsencrypt/**/*/

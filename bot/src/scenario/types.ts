@@ -1,6 +1,6 @@
 // bot/src/scenario/types.ts
 
-import type { OfferKey as DbOfferKey } from '@prisma/client'
+import type { OfferKey as DbOfferKey } from '@app/db'
 
 export type StepId = string
 

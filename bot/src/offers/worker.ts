@@ -1,7 +1,7 @@
 // bot/src/offers/worker.ts
 
 import { Job, Worker } from 'bullmq'
-import { OfferStatus } from '@prisma/client'
+import { OfferStatus } from '@app/db'
 import { redis } from '../redis'
 import { prisma } from '../prisma'
 import { bot } from '../telegraf'
@@ -76,7 +76,7 @@ export const offerExpireWorker = new Worker<OfferExpireJobPayload>(
   {
     connection: redis,
     concurrency: 50,
-  }
+  },
 )
 
 offerExpireWorker.on('failed', (job, err) => {

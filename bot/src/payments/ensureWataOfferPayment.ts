@@ -1,7 +1,7 @@
 // src/payments/ensureWataOfferPayment.ts
 
 import { randomUUID } from 'node:crypto'
-import { OfferInstance, PaymentStatus } from '@prisma/client'
+import { OfferInstance, PaymentStatus } from '@app/db'
 import { prisma } from '../prisma'
 import { CreatePaymentLinkRequest, WataClient, WataCurrency, WataMode } from './wata'
 

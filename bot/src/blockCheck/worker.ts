@@ -4,7 +4,7 @@ import { Worker, Job } from 'bullmq'
 import { Telegram } from 'telegraf'
 import { prisma } from '../prisma'
 import { redis } from '../redis'
-import { ReminderStatus } from '@prisma/client'
+import { ReminderStatus } from '@app/db'
 import { getTelegramBlockInfo } from '../helpers/telegramBlock'
 import { BLOCK_CHECK_QUEUE_NAME, type BlockCheckJobPayload } from './scheduler'
 
@@ -245,7 +245,7 @@ export const blockCheckWorker = new Worker<BlockCheckJobPayload>(
   {
     connection: redis,
     concurrency: 1,
-  }
+  },
 )
 
 blockCheckWorker.on('failed', (job, err) => {

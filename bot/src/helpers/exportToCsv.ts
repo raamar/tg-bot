@@ -4,8 +4,8 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { once } from 'events'
-import type { Prisma, PrismaClient } from '@prisma/client'
-import { PaymentStatus } from '@prisma/client'
+import type { Prisma, PrismaClient } from '@app/db'
+import { PaymentStatus } from '@app/db'
 import { formatDate } from './formatDate'
 import { scenario } from '../scenario/config'
 
@@ -58,7 +58,7 @@ type PendingPaymentRow = Prisma.PaymentGetPayload<{
 }>
 
 export const exportUsersCsvToTempFile = async (
-  opts: ExportUsersCsvOptions
+  opts: ExportUsersCsvOptions,
 ): Promise<{ filePath: string; filename: string; rows: number }> => {
   const prisma = opts.prisma
   const batchSize = opts.batchSize ?? 2000

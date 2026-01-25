@@ -5,7 +5,7 @@ import { redis } from '../redis'
 import { CloudpaymentsQueuePayload } from '../types/funnel'
 import { prisma } from '../prisma'
 import { confirmPayment } from '../payments/confirmPayment'
-import { PaymentStatus } from '@prisma/client'
+import { PaymentStatus } from '@app/db'
 
 export const cloudpaymentsQueue = new Queue<CloudpaymentsQueuePayload>('cloudpayments', {
   connection: redis,
@@ -41,18 +41,18 @@ new Worker<CloudpaymentsQueuePayload>(
         console.log(
           `Payment worker: дубликат успешной оплаты для платежа ${invoiceId}, job ${
             job.id
-          }, уже PAID с paidAt=${existingPayment.paidAt?.toISOString()}`
+          }, уже PAID с paidAt=${existingPayment.paidAt?.toISOString()}`,
         )
         return
       }
 
       if (existingPayment) {
         console.log(
-          `Payment worker: найден существующий платёж ${invoiceId} со статусом ${existingPayment.status}, job ${job.id} — продолжаем confirmPayment`
+          `Payment worker: найден существующий платёж ${invoiceId} со статусом ${existingPayment.status}, job ${job.id} — продолжаем confirmPayment`,
         )
       } else {
         console.log(
-          `Payment worker: платёж ${invoiceId} не найден в БД перед confirmPayment, job ${job.id} — confirmPayment должен обработать ситуацию`
+          `Payment worker: платёж ${invoiceId} не найден в БД перед confirmPayment, job ${job.id} — confirmPayment должен обработать ситуацию`,
         )
       }
       // ---- КОНЕЦ ПРОВЕРКИ НА ДУБЛИКАТА ----
@@ -90,5 +90,5 @@ new Worker<CloudpaymentsQueuePayload>(
   },
   {
     connection: redis,
-  }
+  },
 )

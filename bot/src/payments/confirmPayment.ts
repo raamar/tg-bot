@@ -2,7 +2,7 @@
 
 import { FmtString } from 'telegraf/format'
 import { randomUUID } from 'crypto'
-import { ReminderStatus, OfferStatus } from '@prisma/client'
+import { ReminderStatus, OfferStatus } from '@app/db'
 import { prisma } from '../prisma'
 import { actionsMessages } from '../config'
 import { inline_keyboard_generate } from '../helpers/inline_keyboard_generate'
@@ -49,7 +49,7 @@ async function cancelRemindersForUser(userId: string, now: Date): Promise<void> 
           console.error('Ошибка при отмене напоминания:', reminder.id, err)
           throw err
         }
-      })
+      }),
     )
   } catch (err) {
     console.error(`Ошибка при отмене напоминаний для пользователя ${userId}:`, err)
@@ -60,7 +60,7 @@ async function sendAgreementAndNotifyAdmins(
   user: SimpleUser,
   amount: number,
   currency: string,
-  adminPrefix: string
+  adminPrefix: string,
 ): Promise<void> {
   const { text, buttons } = actionsMessages.AGREE
 
@@ -77,7 +77,7 @@ async function sendAgreementAndNotifyAdmins(
     ...getAdmins().map((adminId) =>
       bot.telegram.sendMessage(adminId, `${adminPrefix}\n` + `💰 Сумма: ${amount.toFixed(2)} ${currency}`, {
         parse_mode: 'HTML',
-      })
+      }),
     ),
   ])
 
