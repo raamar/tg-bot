@@ -203,30 +203,40 @@ bot.start(
     const text: string | undefined = message?.text
     const ref = text?.split(' ')[1] || null
 
-    const user = await prisma.user.upsert({
-      where: { telegramId: String(id) },
-      create: {
-        telegramId: String(id),
-        paid: false,
-        username,
-        firstName: first_name,
-        lastName: last_name,
-        refSource: ref || undefined,
-        blockedByUser: false,
-        blockedAt: null,
-        blockReason: null,
-        lastInteractionAt: new Date(),
-      },
-      update: {
-        username,
-        firstName: first_name,
-        lastName: last_name,
-        blockedByUser: false,
-        blockedAt: null,
-        blockReason: null,
-        lastInteractionAt: new Date(),
-      },
+    const telegramId = String(id)
+    const existing = await prisma.user.findUnique({
+      where: { telegramId },
+      select: { id: true, refSource: true },
     })
+
+    const user = existing
+      ? await prisma.user.update({
+          where: { telegramId },
+          data: {
+            username,
+            firstName: first_name,
+            lastName: last_name,
+            blockedByUser: false,
+            blockedAt: null,
+            blockReason: null,
+            lastInteractionAt: new Date(),
+            ...(existing.refSource ? {} : { refSource: ref }),
+          },
+        })
+      : await prisma.user.create({
+          data: {
+            telegramId,
+            paid: false,
+            username,
+            firstName: first_name,
+            lastName: last_name,
+            refSource: ref,
+            blockedByUser: false,
+            blockedAt: null,
+            blockReason: null,
+            lastInteractionAt: new Date(),
+          },
+        })
 
     const entryStepId = scenario.entryStepId
     await enterStepForUser(user.id, entryStepId, StepVisitSource.SYSTEM)
