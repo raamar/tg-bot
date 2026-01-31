@@ -86,7 +86,7 @@ const originalCallApi = (bot.telegram as any).callApi.bind(bot.telegram)
 }
 
 const telegramWorker = new Worker<Update>(
-  'telegram',
+  'telegram_bot1',
   async (job: Job<Update>) => {
     await bot.handleUpdate(job.data)
   },
