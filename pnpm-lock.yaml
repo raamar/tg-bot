@@ -101,6 +101,34 @@ importers:
         specifier: ^5.8.3
         version: 5.9.3
 
+  partner_bot:
+    dependencies:
+      '@app/db':
+        specifier: workspace:*
+        version: link:../packages/db
+      bullmq:
+        specifier: 5.56.6
+        version: 5.56.6
+      ioredis:
+        specifier: ^5.6.1
+        version: 5.9.2
+      telegraf:
+        specifier: ^4.16.3
+        version: 4.16.3
+      telegraf-throttler:
+        specifier: ^0.6.0
+        version: 0.6.0(telegraf@4.16.3)
+    devDependencies:
+      nodemon:
+        specifier: ^3.1.10
+        version: 3.1.11
+      ts-node:
+        specifier: ^10.9.2
+        version: 10.9.2(@types/node@25.0.10)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+
 packages:
 
   '@cspotcode/source-map-support@0.8.1':

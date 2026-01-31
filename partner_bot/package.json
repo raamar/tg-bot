@@ -1,0 +1,27 @@
+{
+  "name": "partner_bot",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "nodemon --watch src --ext ts --exec ts-node src/worker.ts",
+    "build": "tsc",
+    "start": "node dist/worker.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.7.1",
+  "dependencies": {
+    "@app/db": "workspace:*",
+    "bullmq": "5.56.6",
+    "ioredis": "^5.6.1",
+    "telegraf": "^4.16.3",
+    "telegraf-throttler": "^0.6.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
+  }
+}

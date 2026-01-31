@@ -1,6 +1,7 @@
 packages:
   - api
   - bot
+  - partner_bot
   - packages/*
 onlyBuiltDependencies:
   - '@prisma/client'

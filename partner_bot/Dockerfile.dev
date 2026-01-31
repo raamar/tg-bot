@@ -4,14 +4,12 @@ WORKDIR /repo
 RUN apt-get update && apt-get install -y curl openssl && rm -rf /var/lib/apt/lists/*
 RUN npm install -g pnpm
 
-# workspace manifests (без lock)
 COPY package.json pnpm-workspace.yaml ./
-COPY bot/package.json bot/package.json
+COPY partner_bot/package.json partner_bot/package.json
 COPY packages/db/package.json packages/db/package.json
 COPY packages/db ./packages/db
 
-# ставим зависимости (без frozen)
-RUN pnpm install --no-frozen-lockfile --filter @app/db... --filter ./bot...
+RUN pnpm install --no-frozen-lockfile --filter @app/db... --filter ./partner_bot...
 RUN pnpm --filter @app/db db:generate
 
 CMD ["sh", "-lc", "pnpm dev"]
