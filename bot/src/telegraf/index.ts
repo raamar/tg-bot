@@ -209,17 +209,6 @@ bot.start(
       select: { id: true, refSource: true },
     })
 
-    let refSourceToSet: string | undefined
-    if (ref) {
-      const refExists = await prisma.partnerReferral.findUnique({
-        where: { code: ref },
-        select: { code: true },
-      })
-      if (refExists) {
-        refSourceToSet = ref
-      }
-    }
-
     const user = existing
       ? await prisma.user.update({
           where: { telegramId },
@@ -231,7 +220,7 @@ bot.start(
             blockedAt: null,
             blockReason: null,
             lastInteractionAt: new Date(),
-            ...(existing.refSource ? {} : { refSource: refSourceToSet }),
+            ...(existing.refSource ? {} : { refSource: ref }),
           },
         })
       : await prisma.user.create({
@@ -241,7 +230,7 @@ bot.start(
             username,
             firstName: first_name,
             lastName: last_name,
-            refSource: refSourceToSet,
+            refSource: ref,
             blockedByUser: false,
             blockedAt: null,
             blockReason: null,

@@ -37,33 +37,44 @@ export const exportPartnerRefsCsvToTempFile = async (
   })
 
   const refCodes = referrals.map((ref) => ref.code)
-  const userCounts = await prisma.user.groupBy({
-    by: ['refSource'],
-    where: { refSource: { in: refCodes } },
-    _count: { _all: true },
-  })
 
-  const countsByRef = new Map<string, number>()
-  userCounts.forEach((row) => {
-    if (row.refSource) countsByRef.set(row.refSource, row._count._all)
-  })
-
-  const paymentSums =
+  const users =
     refCodes.length === 0
       ? []
-      : await prisma.$queryRaw<Array<{ refsource: string; totalpaid: Prisma.Decimal | null }>>`
-          SELECT u."refSource" as refsource, SUM(p.amount) as totalpaid
-          FROM "Payment" p
-          JOIN "User" u ON u.id = p."userId"
-          WHERE p.status = 'PAID' AND u."refSource" IN (${Prisma.join(refCodes)})
-          GROUP BY u."refSource"
-        `
+      : await prisma.user.findMany({
+          where: { refSource: { in: refCodes } },
+          select: { id: true, refSource: true },
+        })
+
+  const countsByRef = new Map<string, number>()
+  const userRefById = new Map<string, string>()
+  users.forEach((user) => {
+    if (!user.refSource) return
+    countsByRef.set(user.refSource, (countsByRef.get(user.refSource) ?? 0) + 1)
+    userRefById.set(user.id, user.refSource)
+  })
+
+  const userIds = users.map((user) => user.id)
+  const paymentSums: Array<{ userId: string; _sum: { amount: Prisma.Decimal | null } }> = []
+
+  const chunkSize = 5000
+  for (let i = 0; i < userIds.length; i += chunkSize) {
+    const chunk = userIds.slice(i, i + chunkSize)
+    const batch = await prisma.payment.groupBy({
+      by: ['userId'],
+      where: { status: 'PAID', userId: { in: chunk } },
+      _sum: { amount: true },
+    })
+    paymentSums.push(...batch)
+  }
 
   const paidByRef = new Map<string, Prisma.Decimal>()
   paymentSums.forEach((row) => {
-    if (row.refsource) {
-      paidByRef.set(row.refsource, row.totalpaid ?? new Prisma.Decimal(0))
-    }
+    const refSource = userRefById.get(row.userId)
+    if (!refSource) return
+    const amount = row._sum.amount ?? new Prisma.Decimal(0)
+    const current = paidByRef.get(refSource) ?? new Prisma.Decimal(0)
+    paidByRef.set(refSource, current.add(amount))
   })
 
   const withdrawals = await prisma.partnerWithdrawal.groupBy({
@@ -98,17 +109,17 @@ export const exportPartnerRefsCsvToTempFile = async (
 
   try {
     const headers = [
-      'partner_id',
-      'partner_telegram_id',
-      'partner_username',
-      'ref_code',
-      'ref_name',
-      'unique_users',
-      'total_paid',
-      'partner_earnings',
-      'partner_paid_out',
-      'partner_pending',
-      'partner_available',
+      'ID партнёра',
+      'Telegram ID партнёра',
+      'Username партнёра',
+      'Реф-код',
+      'Название рефки',
+      'Уникальные пользователи',
+      'Сумма оплат',
+      'Заработок партнёра',
+      'Выплачено партнёру',
+      'В ожидании выплаты',
+      'Доступно к выводу',
     ]
 
     await writeChunk(out, UTF8_BOM + headers.map(csvEscape).join(CSV_DELIMITER) + '\n')

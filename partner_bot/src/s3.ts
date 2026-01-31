@@ -14,7 +14,12 @@ const accessKeyId = requireEnv('S3_ACCESS_KEY')
 const secretAccessKey = requireEnv('S3_SECRET_KEY')
 const bucket = requireEnv('S3_BUCKET_NAME')
 
-const forcePathStyle = process.env.S3_FORCE_PATH_STYLE === 'true' || process.env.S3_FORCE_PATH_STYLE === '1'
+const forcePathStyleEnv = process.env.S3_FORCE_PATH_STYLE
+const forcePathStyle =
+  forcePathStyleEnv === undefined ||
+  forcePathStyleEnv === '' ||
+  forcePathStyleEnv === 'true' ||
+  forcePathStyleEnv === '1'
 
 const s3 = new S3Client({
   region,

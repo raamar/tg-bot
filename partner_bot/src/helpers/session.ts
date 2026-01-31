@@ -4,6 +4,7 @@ export type PartnerSession =
   | { action: 'SET_WALLET' }
   | { action: 'WITHDRAW_AMOUNT' }
   | { action: 'REF_NAME_CREATE'; referralId: string }
+  | { action: 'REF_CREATE_MANUAL_CODE' }
   | { action: 'REF_NAME_EDIT'; referralId: string }
   | { action: 'ADMIN_REJECT_REASON'; withdrawalId: string }
   | { action: 'ADMIN_APPROVE_RECEIPT'; withdrawalId: string }
