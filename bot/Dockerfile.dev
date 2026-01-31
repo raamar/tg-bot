@@ -14,4 +14,4 @@ COPY packages/db ./packages/db
 RUN pnpm install --no-frozen-lockfile --filter @app/db... --filter ./bot...
 RUN pnpm --filter @app/db db:generate
 
-CMD ["sh", "-lc", "pnpm dev"]
+CMD ["sh", "-lc", "pnpm --filter @app/db db:generate && pnpm dev"]

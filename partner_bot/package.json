@@ -13,6 +13,7 @@
   "license": "ISC",
   "packageManager": "pnpm@10.7.1",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.879.0",
     "@app/db": "workspace:*",
     "bullmq": "5.56.6",
     "ioredis": "^5.6.1",
