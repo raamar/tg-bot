@@ -7,7 +7,9 @@ export type PartnerSession =
   | { action: 'REF_CREATE_MANUAL_CODE' }
   | { action: 'REF_NAME_EDIT'; referralId: string }
   | { action: 'ADMIN_REJECT_REASON'; withdrawalId: string }
-  | { action: 'ADMIN_APPROVE_RECEIPT'; withdrawalId: string }
+  | { action: 'ADMIN_APPROVE_LINK'; withdrawalId: string }
+  | { action: 'ADMIN_RATE_REF_CODE' }
+  | { action: 'ADMIN_RATE_REF_VALUE'; referralId: string }
 
 const sessionKey = (telegramId: string) => `partnerbot:session:${telegramId}`
 

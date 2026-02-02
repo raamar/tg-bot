@@ -234,6 +234,7 @@ model PartnerReferral {
 
   code String @unique
   name String?
+  earningRate Decimal? @db.Decimal(5, 4)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

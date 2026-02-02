@@ -4,6 +4,7 @@ import path from 'path'
 import { once } from 'events'
 import type { PrismaClient } from '@app/db'
 import { Prisma, PartnerWithdrawalStatus } from '@app/db'
+import { BASE_EARNING_RATE, formatMoney } from './money'
 
 const CSV_DELIMITER = ';'
 const UTF8_BOM = '\ufeff'
@@ -95,11 +96,11 @@ export const exportPartnerRefsCsvToTempFile = async (
     }
   })
 
-  const EARNING_RATE = new Prisma.Decimal('0.623')
   const partnerEarnings = new Map<string, Prisma.Decimal>()
   referrals.forEach((ref) => {
     const totalPaid = paidByRef.get(ref.code) ?? new Prisma.Decimal(0)
-    const earnings = totalPaid.mul(EARNING_RATE)
+    const rate = ref.earningRate ?? BASE_EARNING_RATE
+    const earnings = totalPaid.mul(rate)
     const current = partnerEarnings.get(ref.partnerId) ?? new Prisma.Decimal(0)
     partnerEarnings.set(ref.partnerId, current.add(earnings))
   })
@@ -114,6 +115,7 @@ export const exportPartnerRefsCsvToTempFile = async (
       'Username партнёра',
       'Реф-код',
       'Название рефки',
+      'Ставка рефки (%)',
       'Уникальные пользователи',
       'Сумма оплат',
       'Заработок партнёра',
@@ -126,25 +128,28 @@ export const exportPartnerRefsCsvToTempFile = async (
 
     for (const ref of referrals) {
       const totalPaid = paidByRef.get(ref.code) ?? new Prisma.Decimal(0)
-      const earnings = totalPaid.mul(EARNING_RATE)
+      const rate = ref.earningRate ?? BASE_EARNING_RATE
+      const earnings = totalPaid.mul(rate)
 
       const paidOut = partnerPaidOut.get(ref.partnerId) ?? new Prisma.Decimal(0)
       const pending = partnerPending.get(ref.partnerId) ?? new Prisma.Decimal(0)
       const totalPartnerEarnings = partnerEarnings.get(ref.partnerId) ?? new Prisma.Decimal(0)
       const available = totalPartnerEarnings.sub(paidOut).sub(pending)
 
+      const ratePercent = formatMoney(rate.mul(100))
       const row = [
         ref.partnerId,
         ref.partner.telegramId,
         ref.partner.username || '',
         ref.code,
         ref.name || ref.code,
+        ratePercent,
         countsByRef.get(ref.code) ?? 0,
-        totalPaid.toFixed(2),
-        earnings.toFixed(2),
-        paidOut.toFixed(2),
-        pending.toFixed(2),
-        available.toFixed(2),
+        formatMoney(totalPaid),
+        formatMoney(earnings),
+        formatMoney(paidOut),
+        formatMoney(pending),
+        formatMoney(available),
       ]
 
       await writeChunk(out, row.map(csvEscape).join(CSV_DELIMITER) + '\n')

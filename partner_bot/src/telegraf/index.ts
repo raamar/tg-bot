@@ -3,7 +3,6 @@ import type { Update } from 'telegraf/typings/core/types/typegram'
 import telegrafThrottler from 'telegraf-throttler'
 import { Worker, Job } from 'bullmq'
 import { PartnerWithdrawalStatus, Prisma } from '@app/db'
-import path from 'path'
 
 import { redis } from '../redis'
 import { prisma } from '../prisma'
@@ -13,7 +12,7 @@ import { getMenuMessage, setMenuMessage } from '../helpers/menuMessage'
 import { clearListMessages, getListMessages, pushListMessage } from '../helpers/listMessages'
 import { clearNoticeMessages, getNoticeMessages, pushNoticeMessage } from '../helpers/noticeMessages'
 import { exportPartnerRefsCsvToTempFile } from '../helpers/exportPartnerRefsCsv'
-import { uploadReceiptToS3 } from '../s3'
+import { BASE_EARNING_RATE, formatMoney, formatPercent, parseAmount, parsePercent } from '../helpers/money'
 
 if (process.env.TELEGRAM_TOKEN_2 === undefined) {
   throw new Error('TELEGRAM_TOKEN_2 is not defined')
@@ -37,27 +36,13 @@ const throttler = telegrafThrottler({
 
 bot.use(throttler)
 
-const EARNING_RATE = new Prisma.Decimal('0.623')
-const REF_PREFIX = 'ref'
 const REF_LIMIT = 10
 const REF_PAGE_SIZE = 3
 const WITHDRAW_PAGE_SIZE = 3
 const MAIN_BOT_USERNAME = process.env.TELEGRAM_BOT_USERNAME
+const REF_CODE_REGEX = /^[A-Za-z0-9_-]{3,32}$/
 
-const escapeHtml = (value: string): string =>
-  value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-
-const formatMoney = (value: Prisma.Decimal | number): string => {
-  const num = typeof value === 'number' ? value : value.toNumber()
-  return num.toFixed(2)
-}
-
-const parseAmount = (text: string): number | null => {
-  const normalized = text.replace(',', '.').replace(/\s+/g, '')
-  const value = Number.parseFloat(normalized)
-  if (!Number.isFinite(value) || value <= 0) return null
-  return value
-}
+const escapeHtml = (value: string): string => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
 const ensurePartner = async (telegramId: string, username?: string, firstName?: string, lastName?: string) => {
   return prisma.partner.upsert({
@@ -87,7 +72,7 @@ const generateReferralCode = async (): Promise<string> => {
   for (let i = 0; i < 5; i += 1) {
     const random = Math.floor(Math.random() * 0xffffff)
     const hex = random.toString(16).padStart(6, '0').toUpperCase()
-    const code = `${REF_PREFIX}${hex}`
+    const code = hex
     const exists = await prisma.partnerReferral.findUnique({
       where: { code },
       select: { id: true },
@@ -99,6 +84,7 @@ const generateReferralCode = async (): Promise<string> => {
 
 const buildMainMenu = (admin: boolean, walletLabel: string, withdrawCount: number) => {
   const rows = [
+    [Markup.button.callback('🔄 Обновить статистику', 'REFRESH_STATS')],
     [Markup.button.callback('🔗 Реф. ссылки', 'REF_LIST')],
     [Markup.button.callback(walletLabel, 'WALLET_SET')],
     [Markup.button.callback('💸 Запросить вывод', 'WITHDRAW_REQUEST')],
@@ -108,6 +94,7 @@ const buildMainMenu = (admin: boolean, walletLabel: string, withdrawCount: numbe
     const label = withdrawCount > 0 ? `🧾 Заявки на вывод (${withdrawCount})` : '🧾 Заявки на вывод'
     rows.push([Markup.button.callback(label, 'ADMIN_WITHDRAW_LIST')])
     rows.push([Markup.button.callback('📥 CSV выгрузка', 'ADMIN_EXPORT_CSV')])
+    rows.push([Markup.button.callback('🧮 Изменить ставку реф. ссылки', 'ADMIN_RATE_REF')])
   }
 
   return Markup.inlineKeyboard(rows)
@@ -162,16 +149,19 @@ const getPartnerStats = async (partnerId: string) => {
 
   const items = referrals.map((ref) => {
     const totalPaid = paidByRef.get(ref.code) ?? new Prisma.Decimal(0)
-    const earnings = totalPaid.mul(EARNING_RATE)
+    const rate = ref.earningRate ?? BASE_EARNING_RATE
+    const earnings = totalPaid.mul(rate)
     return {
       referral: ref,
       users: countsByRef.get(ref.code) ?? 0,
       totalPaid,
       earnings,
+      rate,
     }
   })
 
   const totalEarnings = items.reduce((acc, item) => acc.add(item.earnings), new Prisma.Decimal(0))
+  const totalUsers = items.reduce((acc, item) => acc + item.users, 0)
 
   const withdrawals = await prisma.partnerWithdrawal.groupBy({
     by: ['status'],
@@ -195,6 +185,7 @@ const getPartnerStats = async (partnerId: string) => {
     items,
     totals: {
       totalEarnings,
+      totalUsers,
       approved,
       pending,
       available,
@@ -321,16 +312,17 @@ const sendMainMenu = async (ctx: any, opts?: { clearNotices?: boolean }) => {
     : 0
 
   const walletLine = partner.usdtWallet
-    ? `USDT кошелёк: ${escapeHtml(partner.usdtWallet)}`
-    : 'USDT кошелёк: не указан'
+    ? `👛 USDT кошелёк: ${escapeHtml(partner.usdtWallet)}`
+    : '👛 USDT кошелёк: не указан'
 
   const text = [
-    '<b>Меню партнёра</b>',
-    `Реф. ссылок: ${stats.items.length}`,
-    `Сумма оплат: ${formatMoney(stats.items.reduce((acc, item) => acc.add(item.totalPaid), new Prisma.Decimal(0)))} RUB`,
-    `В ожидании: ${formatMoney(stats.totals.pending)} RUB`,
-    `Выплачено: ${formatMoney(stats.totals.approved)} RUB`,
-    `Доступно к выводу: ${formatMoney(stats.totals.available)} RUB`,
+    '⚙️ <b>Меню партнёра</b> ⚙️',
+    `🔗 Реф. ссылок: ${stats.items.length}`,
+    `✨ Уникальные пользователи: ${stats.totals.totalUsers}`,
+    `💸 Заработано всего: ${formatMoney(stats.totals.totalEarnings)} ₽`,
+    `🎉 <b>Доступно к выводу: ${formatMoney(stats.totals.available)} ₽</b>`,
+    `⏳ В ожидании выплаты: ${formatMoney(stats.totals.pending)} ₽`,
+    `💲 Выплачено: ${formatMoney(stats.totals.approved)} ₽`,
     walletLine,
   ].join('\n')
 
@@ -374,11 +366,7 @@ const sendRefList = async (ctx: any) => {
 
   if (!refs.length) {
     await clearListForUser(ctx)
-    await sendControlMessage(
-      ctx,
-      `<b>Реф. ссылки</b>\nУ вас пока нет реф. ссылок.`,
-      Markup.inlineKeyboard(rows),
-    )
+    await sendControlMessage(ctx, `<b>Реф. ссылки</b>\nУ вас пока нет реф. ссылок.`, Markup.inlineKeyboard(rows))
     return
   }
 
@@ -437,6 +425,16 @@ bot.action(
 )
 
 bot.action(
+  'REFRESH_STATS',
+  withErrorHandling(async (ctx) => {
+    await ctx.answerCbQuery().catch(() => {})
+    await clearSession(String(ctx.from.id))
+    await clearListForUser(ctx)
+    await sendMainMenu(ctx, { clearNotices: true })
+  }),
+)
+
+bot.action(
   /^REF_LIST(?::(\d+))?$/,
   withErrorHandling(async (ctx) => {
     await ctx.answerCbQuery().catch(() => {})
@@ -482,9 +480,7 @@ bot.action(
     await sendControlMessage(
       ctx,
       text,
-      Markup.inlineKeyboard([
-        [Markup.button.callback('ОК', `REF_NAME_SKIP:${referral.id}`)],
-      ]),
+      Markup.inlineKeyboard([[Markup.button.callback('ОК', `REF_NAME_SKIP:${referral.id}`)]]),
     )
   }),
 )
@@ -502,7 +498,7 @@ bot.action(
     await setSession(telegramId, { action: 'REF_CREATE_MANUAL_CODE' })
     await sendControlMessage(
       ctx,
-      'Введите реф-код в формате refXXXXXX (HEX).',
+      'Введите реф-код (латиница/цифры, можно _ и -), без пробелов.',
       Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'REF_LIST')]]),
     )
   }),
@@ -571,9 +567,8 @@ bot.action(
       `<b>Реф. ссылка:</b> ${escapeHtml(referral.name || referral.code)}`,
       `Код: ${escapeHtml(referral.code)}`,
       formatCodeBlock(buildRefLink(referral.code)),
-      `Уникальные пользователи: ${item.users}`,
-      `Общая сумма оплат: ${formatMoney(item.totalPaid)} RUB`,
-      `Заработок партнёра: ${formatMoney(item.earnings)} RUB`,
+      `✨ Уникальные пользователи: ${item.users}`,
+      `💸 Заработано всего: ${formatMoney(item.earnings)} ₽`,
     ].join('\n')
 
     await sendControlMessage(ctx, text, Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'REF_LIST')]]))
@@ -592,7 +587,7 @@ bot.action(
     const current = partner.usdtWallet ? `Текущий: ${escapeHtml(partner.usdtWallet)}\n` : ''
     await sendControlMessage(
       ctx,
-      `<b>${title}</b>\n${current}Введите ваш USDT кошелёк (текст).`,
+      `<b>${title}</b>\n${current}Введите ваш USDT кошелёк в сети TRC20.`,
       Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'MAIN_MENU')]]),
     )
   }),
@@ -631,9 +626,46 @@ bot.action(
     await setSession(telegramId, { action: 'WITHDRAW_AMOUNT' })
     await sendControlMessage(
       ctx,
-      `Введите сумму для вывода (доступно ${formatMoney(stats.totals.available)} RUB).`,
-      Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'MAIN_MENU')]]),
+      `Введите сумму для вывода (доступно ${formatMoney(stats.totals.available)} ₽) или нажмите «Вывести всё».`,
+      Markup.inlineKeyboard([
+        [Markup.button.callback('💸 Вывести всё', 'WITHDRAW_ALL')],
+        [Markup.button.callback('⬅️ Назад', 'MAIN_MENU')],
+      ]),
     )
+  }),
+)
+
+bot.action(
+  'WITHDRAW_ALL',
+  withErrorHandling(async (ctx) => {
+    await ctx.answerCbQuery().catch(() => {})
+    await clearListForUser(ctx)
+    const telegramId = String(ctx.from.id)
+    const partner = await ensurePartner(telegramId)
+    const stats = await getPartnerStats(partner.id)
+    const pendingCount = await prisma.partnerWithdrawal.count({
+      where: { partnerId: partner.id, status: PartnerWithdrawalStatus.IN_REVIEW },
+    })
+
+    if (pendingCount >= 2) {
+      await sendControlMessage(
+        ctx,
+        'У вас уже есть 2 заявки в ожидании. Дождитесь решения по ним.',
+        Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'MAIN_MENU')]]),
+      )
+      return
+    }
+
+    if (stats.totals.available.lte(0)) {
+      await sendControlMessage(
+        ctx,
+        'Сейчас нет доступного баланса для вывода.',
+        Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'MAIN_MENU')]]),
+      )
+      return
+    }
+
+    await createWithdrawalRequest(ctx, partner, stats.totals.available)
   }),
 )
 
@@ -692,7 +724,7 @@ bot.action(
         `Партнёр: ${partnerLabel}`,
         `Telegram ID: ${withdrawal.partner.telegramId}`,
         `Кошелёк: ${withdrawal.partner.usdtWallet || 'не указан'}`,
-        `Сумма: ${formatMoney(withdrawal.amount)} RUB`,
+        `Сумма: ${formatMoney(withdrawal.amount)} ₽`,
       ].join('\n')
 
       const sent = await ctx.reply(text, {
@@ -733,6 +765,28 @@ bot.action(
 )
 
 bot.action(
+  'ADMIN_RATE_REF',
+  withErrorHandling(async (ctx) => {
+    await ctx.answerCbQuery().catch(() => {})
+    await clearListForUser(ctx)
+
+    if (!isAdmin(ctx.from?.id)) {
+      await sendNotice(ctx, 'Недостаточно прав')
+      await sendMainMenu(ctx)
+      return
+    }
+
+    const telegramId = String(ctx.from.id)
+    await setSession(telegramId, { action: 'ADMIN_RATE_REF_CODE' })
+    await sendControlMessage(
+      ctx,
+      'Введите реф-код, для которого нужно изменить ставку.',
+      Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'MAIN_MENU')]]),
+    )
+  }),
+)
+
+bot.action(
   /^ADMIN_APPROVE:(.+)$/,
   withErrorHandling(async (ctx) => {
     await ctx.answerCbQuery().catch(() => {})
@@ -745,10 +799,10 @@ bot.action(
     }
 
     const withdrawalId = ctx.match[1]
-    await setSession(String(ctx.from.id), { action: 'ADMIN_APPROVE_RECEIPT', withdrawalId })
+    await setSession(String(ctx.from.id), { action: 'ADMIN_APPROVE_LINK', withdrawalId })
     await sendControlMessage(
       ctx,
-      'Отправьте скрин подтверждения (фото или файл).',
+      'Введите ссылку на выплату в TronScan.',
       Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'MAIN_MENU')]]),
     )
   }),
@@ -802,8 +856,8 @@ bot.on(
         return
       }
 
-      if (!/^ref[0-9A-Fa-f]{6}$/.test(codeText)) {
-        await sendNotice(ctx, 'Неверный формат. Пример: refA1B2C3')
+      if (!REF_CODE_REGEX.test(codeText)) {
+        await sendNotice(ctx, 'Неверный формат. Пример: A1B2C3')
         await deleteUserMessage(ctx)
         return
       }
@@ -843,9 +897,7 @@ bot.on(
       await sendControlMessage(
         ctx,
         text,
-        Markup.inlineKeyboard([
-          [Markup.button.callback('ОК', `REF_NAME_SKIP:${referral.id}`)],
-        ]),
+        Markup.inlineKeyboard([[Markup.button.callback('ОК', `REF_NAME_SKIP:${referral.id}`)]]),
       )
       await deleteUserMessage(ctx)
 
@@ -914,49 +966,83 @@ bot.on(
         return
       }
 
-      const stats = await getPartnerStats(partner.id)
-      if (new Prisma.Decimal(amount).gt(stats.totals.available)) {
-        await sendNotice(ctx, `Сумма превышает доступный баланс (${formatMoney(stats.totals.available)} RUB).`)
+      await createWithdrawalRequest(ctx, partner, new Prisma.Decimal(amount))
+      await deleteUserMessage(ctx)
+      return
+    }
+
+    if (session.action === 'ADMIN_RATE_REF_CODE') {
+      if (!isAdmin(ctx.from?.id)) {
+        await clearSession(telegramId)
+        await sendNotice(ctx, 'Недостаточно прав')
+        await sendMainMenu(ctx)
+        return
+      }
+
+      const code = ctx.message?.text?.trim()
+      if (!code || !REF_CODE_REGEX.test(code)) {
+        await sendNotice(ctx, 'Неверный формат реф-кода.')
         await deleteUserMessage(ctx)
         return
       }
 
-      const withdrawal = await prisma.partnerWithdrawal.create({
-        data: {
-          partnerId: partner.id,
-          amount: new Prisma.Decimal(amount),
-          status: PartnerWithdrawalStatus.IN_REVIEW,
-        },
+      const referral = await prisma.partnerReferral.findUnique({ where: { code } })
+      if (!referral) {
+        await sendNotice(ctx, 'Реф. ссылка не найдена')
+        await deleteUserMessage(ctx)
+        return
+      }
+
+      const currentRate = referral.earningRate ?? BASE_EARNING_RATE
+      await setSession(telegramId, { action: 'ADMIN_RATE_REF_VALUE', referralId: referral.id })
+
+      const text = [
+        `<b>Реф. ссылка:</b> ${escapeHtml(referral.name || referral.code)}`,
+        `Код: ${escapeHtml(referral.code)}`,
+        '',
+        `Текущая ставка: ${formatPercent(currentRate)}%`,
+        'Базовая ставка считается так: (100% - 11%) x 70% = 62.3%',
+        '',
+        'Введите новый процент выплат (например 62.3).',
+      ].join('\n')
+
+      await sendControlMessage(ctx, text, Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'MAIN_MENU')]]))
+      await deleteUserMessage(ctx)
+      return
+    }
+
+    if (session.action === 'ADMIN_RATE_REF_VALUE') {
+      if (!isAdmin(ctx.from?.id)) {
+        await clearSession(telegramId)
+        await sendNotice(ctx, 'Недостаточно прав')
+        await sendMainMenu(ctx)
+        return
+      }
+
+      const valueText = ctx.message?.text
+      if (!valueText) {
+        await sendNotice(ctx, 'Введите процент числом.')
+        await deleteUserMessage(ctx)
+        return
+      }
+
+      const percent = parsePercent(valueText)
+      if (!percent) {
+        await sendNotice(ctx, 'Неверный процент. Пример: 62.3')
+        await deleteUserMessage(ctx)
+        return
+      }
+
+      const rate = new Prisma.Decimal(percent).div(100)
+      await prisma.partnerReferral.update({
+        where: { id: session.referralId },
+        data: { earningRate: rate },
       })
 
       await clearSession(telegramId)
-      await sendNotice(ctx, 'Заявка на вывод создана')
+      await sendNotice(ctx, 'Ставка обновлена')
       await sendMainMenu(ctx)
       await deleteUserMessage(ctx)
-
-      const admins = process.env.ADMIN_IDS?.split(',').map(Number).filter(Boolean) || []
-      if (admins.length) {
-        const text = [
-          '🧾 Новая заявка на вывод',
-          `ID: ${withdrawal.id}`,
-          `Партнёр: ${partner.username || partner.telegramId}`,
-          `Сумма: ${formatMoney(withdrawal.amount)} RUB`,
-        ].join('\n')
-
-        await Promise.allSettled(
-          admins.map((adminId) =>
-            bot.telegram.sendMessage(adminId, text, {
-              reply_markup: Markup.inlineKeyboard([
-                [
-                  Markup.button.callback('✅ Одобрить', `ADMIN_APPROVE:${withdrawal.id}`),
-                  Markup.button.callback('❌ Отклонить', `ADMIN_REJECT:${withdrawal.id}`),
-                ],
-              ]).reply_markup,
-            }),
-          ),
-        )
-      }
-
       return
     }
 
@@ -1009,7 +1095,7 @@ bot.on(
       return
     }
 
-    if (session.action === 'ADMIN_APPROVE_RECEIPT') {
+    if (session.action === 'ADMIN_APPROVE_LINK') {
       if (!isAdmin(ctx.from?.id)) {
         await clearSession(telegramId)
         await sendNotice(ctx, 'Недостаточно прав')
@@ -1029,35 +1115,19 @@ bot.on(
         return
       }
 
-      const message: any = ctx.message
-      const photoList = message?.photo
-      const photo = Array.isArray(photoList) && photoList.length ? photoList[photoList.length - 1] : undefined
-      const document = message?.document
-      const fileId = photo?.file_id || document?.file_id
-
-      if (!fileId) {
-        await sendNotice(ctx, 'Нужен файл или фото скрина.')
+      const linkText = ctx.message?.text?.trim()
+      if (!linkText || !/^https?:\/\//i.test(linkText)) {
+        await sendNotice(ctx, 'Нужна ссылка на выплату (начиная с http/https).')
         await deleteUserMessage(ctx)
         return
       }
-
-      const file = await bot.telegram.getFile(fileId)
-      const filePath = file.file_path || ''
-      const ext = path.extname(filePath) || '.jpg'
-      const link = await bot.telegram.getFileLink(fileId)
-      const res = await fetch(link.href)
-      const buffer = Buffer.from(await res.arrayBuffer())
-      const contentType = res.headers.get('content-type') || undefined
-
-      const key = `receipts/${withdrawal.partnerId}/${withdrawal.id}${ext}`
-      const receiptUrl = await uploadReceiptToS3(key, buffer, contentType)
 
       await prisma.partnerWithdrawal.update({
         where: { id: withdrawal.id },
         data: {
           status: PartnerWithdrawalStatus.APPROVED,
-          receiptUrl,
-          receiptKey: key,
+          receiptUrl: linkText,
+          receiptKey: null,
           decidedAt: new Date(),
         },
       })
@@ -1069,14 +1139,71 @@ bot.on(
 
       await bot.telegram.sendMessage(
         withdrawal.partner.telegramId,
-        `✅ Ваша заявка на вывод одобрена. Сумма: ${formatMoney(withdrawal.amount)} RUB`,
+        [
+          '✅ Ваша заявка на вывод одобрена!',
+          `💸 Сумма: ${formatMoney(withdrawal.amount)} ₽`,
+          `🔗 Ссылка на выплату: ${escapeHtml(linkText)}`,
+          '<b>🔥 Ожидайте, выплата придёт в течении 5-30 минут!</b>',
+        ].join('\n'),
+        { parse_mode: 'HTML', link_preview_options: {
+          is_disabled: true
+        } },
       )
-      await bot.telegram.sendPhoto(withdrawal.partner.telegramId, { source: buffer })
 
       return
     }
   }),
 )
+
+const createWithdrawalRequest = async (ctx: any, partner: any, amount: Prisma.Decimal) => {
+  const telegramId = String(ctx.from.id)
+  const stats = await getPartnerStats(partner.id)
+  const normalizedAmount = new Prisma.Decimal(Math.floor(amount.toNumber()))
+  if (normalizedAmount.lte(0)) {
+    await sendNotice(ctx, 'Сумма должна быть больше 0.')
+    return
+  }
+
+  if (normalizedAmount.gt(stats.totals.available)) {
+    await sendNotice(ctx, `Сумма превышает доступный баланс (${formatMoney(stats.totals.available)} ₽).`)
+    return
+  }
+
+  const withdrawal = await prisma.partnerWithdrawal.create({
+    data: {
+      partnerId: partner.id,
+      amount: normalizedAmount,
+      status: PartnerWithdrawalStatus.IN_REVIEW,
+    },
+  })
+
+  await clearSession(telegramId)
+  await sendNotice(ctx, 'Заявка на вывод создана')
+  await sendMainMenu(ctx)
+
+  const admins = process.env.ADMIN_IDS?.split(',').map(Number).filter(Boolean) || []
+  if (admins.length) {
+    const text = [
+      '🧾 Новая заявка на вывод',
+      `ID: ${withdrawal.id}`,
+      `Партнёр: ${partner.username || partner.telegramId}`,
+      `Сумма: ${formatMoney(withdrawal.amount)} ₽`,
+    ].join('\n')
+
+    await Promise.allSettled(
+      admins.map((adminId) =>
+        bot.telegram.sendMessage(adminId, text, {
+          reply_markup: Markup.inlineKeyboard([
+            [
+              Markup.button.callback('✅ Одобрить', `ADMIN_APPROVE:${withdrawal.id}`),
+              Markup.button.callback('❌ Отклонить', `ADMIN_REJECT:${withdrawal.id}`),
+            ],
+          ]).reply_markup,
+        }),
+      ),
+    )
+  }
+}
 
 const partnerTelegramWorker = new Worker<Update>(
   'telegram_bot2',
