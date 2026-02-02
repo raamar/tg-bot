@@ -1,11 +1,13 @@
 COMPOSE_FILE = docker-compose.prod.yml
 
 up:
-	docker compose -f $(COMPOSE_FILE) up --build -d
+	docker compose -f $(COMPOSE_FILE) build --parallel 1
+	docker compose -f $(COMPOSE_FILE) up -d
 
 # Поднять всё вместе с traefik (используется только в одной "главной" ветке)
 up-with-traefik:
-	docker compose -f $(COMPOSE_FILE) --profile traefik up --build -d
+	docker compose -f $(COMPOSE_FILE) --profile traefik build --parallel 1
+	docker compose -f $(COMPOSE_FILE) --profile traefik up -d
 
 down:
 	docker compose -f $(COMPOSE_FILE) down
