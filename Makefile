@@ -1,6 +1,7 @@
 COMPOSE_FILE = docker-compose.prod.yml
 
 up:
+	docker compose -f $(COMPOSE_FILE) pull
 	docker compose -f $(COMPOSE_FILE) up -d
 
 up-build-linear:
@@ -16,6 +17,11 @@ up-build-with-traefik-linear:
 	docker compose -f $(COMPOSE_FILE) --profile traefik build bot
 	docker compose -f $(COMPOSE_FILE) --profile traefik build partner_bot
 	docker compose -f $(COMPOSE_FILE) --profile traefik up -d
+
+deploy:
+	git pull
+	docker compose -f $(COMPOSE_FILE) pull
+	docker compose -f $(COMPOSE_FILE) up -d
 
 
 down:

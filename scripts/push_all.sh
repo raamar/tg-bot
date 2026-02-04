@@ -58,8 +58,24 @@ push_image() {
 
 start_tunnel
 
-if ! compose_build; then
-  log "docker compose build failed, switching to parallel docker build"
+COMPOSE_FILE="${ROOT_DIR}/docker-compose.prod.yml"
+if rg -q "^[[:space:]]*build:" "${COMPOSE_FILE}"; then
+  if ! compose_build; then
+    log "docker compose build failed, switching to parallel docker build"
+    build_image "bot-a-api" "${ROOT_DIR}/api/Dockerfile" &
+    PID_API=$!
+    build_image "bot-a-db-migrate" "${ROOT_DIR}/packages/db/Dockerfile.migrate" &
+    PID_DBM=$!
+    build_image "bot-a-bot" "${ROOT_DIR}/bot/Dockerfile" &
+    PID_BOT=$!
+    build_image "bot-a-partner-bot" "${ROOT_DIR}/partner_bot/Dockerfile" &
+    PID_PBOT=$!
+
+    wait "${PID_API}" "${PID_DBM}" "${PID_BOT}" "${PID_PBOT}"
+    log "All builds completed"
+  fi
+else
+  log "No build sections in docker-compose.prod.yml, switching to parallel docker build"
   build_image "bot-a-api" "${ROOT_DIR}/api/Dockerfile" &
   PID_API=$!
   build_image "bot-a-db-migrate" "${ROOT_DIR}/packages/db/Dockerfile.migrate" &
