@@ -50,6 +50,11 @@ const MAIN_BOT_USERNAME = process.env.TELEGRAM_BOT_USERNAME
 const REF_CODE_REGEX = /^[A-Za-z0-9_-]{3,32}$/
 const ACQUIRING_FEE_RATE = new Prisma.Decimal(process.env.ACQUIRING_FEE_RATE ?? '0.11')
 const ACQUIRING_NET_RATE = new Prisma.Decimal(1).sub(ACQUIRING_FEE_RATE)
+const MSK_OFFSET_MS = 3 * 60 * 60 * 1000
+const DAY_MS = 24 * 60 * 60 * 1000
+
+type AnalyticsType = 'DAY' | 'WEEK' | 'MONTH'
+const ANALYTICS_DEFAULT_TYPE: AnalyticsType = 'WEEK'
 
 const escapeHtml = (value: string): string => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
@@ -77,6 +82,79 @@ const buildRefLink = (code: string): string => {
 
 const formatCodeBlock = (value: string): string => `<pre><code>${escapeHtml(value)}</code></pre>`
 
+const pad2 = (value: number): string => String(value).padStart(2, '0')
+
+const formatDateRangeMsk = (startMskMs: number, endMskMsExclusive: number): string => {
+  const start = new Date(startMskMs)
+  const end = new Date(endMskMsExclusive - 1)
+
+  const startLabel = `${pad2(start.getUTCDate())}.${pad2(start.getUTCMonth() + 1)}.${start.getUTCFullYear()}`
+  const endLabel = `${pad2(end.getUTCDate())}.${pad2(end.getUTCMonth() + 1)}.${end.getUTCFullYear()}`
+
+  return `${startLabel} - ${endLabel}`
+}
+
+const addMonths = (year: number, month: number, offset: number): { year: number; month: number } => {
+  const total = year * 12 + month + offset
+  const nextYear = Math.floor(total / 12)
+  let nextMonth = total % 12
+  if (nextMonth < 0) {
+    nextMonth += 12
+    return { year: nextYear - 1, month: nextMonth }
+  }
+  return { year: nextYear, month: nextMonth }
+}
+
+const getPeriodStartMskMsForUtc = (dateUtc: Date, type: AnalyticsType): number => {
+  const msk = new Date(dateUtc.getTime() + MSK_OFFSET_MS)
+  const year = msk.getUTCFullYear()
+  const month = msk.getUTCMonth()
+  const day = msk.getUTCDate()
+  const dayOfWeek = msk.getUTCDay()
+
+  if (type === 'DAY') {
+    return Date.UTC(year, month, day, 0, 0, 0)
+  }
+
+  if (type === 'WEEK') {
+    const diff = (dayOfWeek + 6) % 7
+    return Date.UTC(year, month, day, 0, 0, 0) - diff * DAY_MS
+  }
+
+  return Date.UTC(year, month, 1, 0, 0, 0)
+}
+
+const getPeriodRange = (type: AnalyticsType, offset: number) => {
+  const nowMsk = new Date(Date.now() + MSK_OFFSET_MS)
+  const year = nowMsk.getUTCFullYear()
+  const month = nowMsk.getUTCMonth()
+  const day = nowMsk.getUTCDate()
+  const dayOfWeek = nowMsk.getUTCDay()
+
+  let startMskMs = 0
+  let endMskMs = 0
+
+  if (type === 'DAY') {
+    startMskMs = Date.UTC(year, month, day, 0, 0, 0) + offset * DAY_MS
+    endMskMs = startMskMs + DAY_MS
+  } else if (type === 'WEEK') {
+    const diff = (dayOfWeek + 6) % 7
+    startMskMs = Date.UTC(year, month, day, 0, 0, 0) - diff * DAY_MS + offset * 7 * DAY_MS
+    endMskMs = startMskMs + 7 * DAY_MS
+  } else {
+    const target = addMonths(year, month, offset)
+    startMskMs = Date.UTC(target.year, target.month, 1, 0, 0, 0)
+    const next = addMonths(target.year, target.month, 1)
+    endMskMs = Date.UTC(next.year, next.month, 1, 0, 0, 0)
+  }
+
+  const startUtc = new Date(startMskMs - MSK_OFFSET_MS)
+  const endUtc = new Date(endMskMs - MSK_OFFSET_MS)
+  const label = formatDateRangeMsk(startMskMs, endMskMs)
+
+  return { startUtc, endUtc, startMskMs, endMskMs, label }
+}
+
 const generateReferralCode = async (): Promise<string> => {
   for (let i = 0; i < 5; i += 1) {
     const random = Math.floor(Math.random() * 0xffffff)
@@ -94,6 +172,7 @@ const generateReferralCode = async (): Promise<string> => {
 const buildMainMenu = (admin: boolean, walletLabel: string, withdrawCount: number) => {
   const rows: Array<Array<ReturnType<typeof Markup.button.callback> | ReturnType<typeof Markup.button.url>>> = [
     [Markup.button.callback('🔄 Обновить статистику', 'REFRESH_STATS')],
+    [Markup.button.callback('📊 Аналитика', 'ANALYTICS')],
     [Markup.button.callback('🔗 Реф. ссылки', 'REF_LIST')],
     [Markup.button.callback(walletLabel, 'WALLET_SET')],
     [Markup.button.callback('💸 Запросить вывод', 'WITHDRAW_REQUEST')],
@@ -272,6 +351,135 @@ const getAdminPartnerRevenue = async (excludePartnerId: string | null) => {
   return { adminRevenue }
 }
 
+const getPaidByRefForPeriod = async (
+  refCodes: string[],
+  startUtc: Date,
+  endUtc: Date,
+): Promise<{ paidByRef: Map<string, Prisma.Decimal>; usersByRef: Map<string, string> }> => {
+  const users =
+    refCodes.length === 0
+      ? []
+      : await prisma.user.findMany({
+          where: { refSource: { in: refCodes } },
+          select: { id: true, refSource: true },
+        })
+
+  const userRefById = new Map<string, string>()
+  users.forEach((user) => {
+    if (!user.refSource) return
+    userRefById.set(user.id, user.refSource)
+  })
+
+  const userIds = users.map((user) => user.id)
+  const lastPaidByUserId = new Map<string, Prisma.Decimal>()
+
+  const chunkSize = 5000
+  for (let i = 0; i < userIds.length; i += chunkSize) {
+    const chunk = userIds.slice(i, i + chunkSize)
+    const payments = await prisma.payment.findMany({
+      where: {
+        status: 'PAID',
+        userId: { in: chunk },
+        OR: [
+          { paidAt: { gte: startUtc, lt: endUtc } },
+          { paidAt: null, createdAt: { gte: startUtc, lt: endUtc } },
+        ],
+      },
+      select: { userId: true, amount: true, paidAt: true, createdAt: true },
+      orderBy: [{ userId: 'asc' }, { paidAt: 'desc' }, { createdAt: 'desc' }],
+    })
+
+    for (const payment of payments) {
+      if (!lastPaidByUserId.has(payment.userId)) {
+        lastPaidByUserId.set(payment.userId, payment.amount)
+      }
+    }
+  }
+
+  const paidByRef = new Map<string, Prisma.Decimal>()
+  users.forEach((user) => {
+    const refSource = user.refSource
+    if (!refSource) return
+    const amount = lastPaidByUserId.get(user.id)
+    if (!amount) return
+    const current = paidByRef.get(refSource) ?? new Prisma.Decimal(0)
+    paidByRef.set(refSource, current.add(amount))
+  })
+
+  return { paidByRef, usersByRef: userRefById }
+}
+
+const getPartnerPeriodStats = async (
+  partnerId: string,
+  startUtc: Date,
+  endUtc: Date,
+): Promise<{ uniqueUsers: number; earnings: Prisma.Decimal }> => {
+  const referrals = await prisma.partnerReferral.findMany({
+    where: { partnerId },
+    orderBy: { createdAt: 'asc' },
+  })
+
+  const refCodes = referrals.map((ref) => ref.code)
+
+  const uniqueUsers = await prisma.user.count({
+    where: {
+      refSource: { in: refCodes },
+      createdAt: { gte: startUtc, lt: endUtc },
+    },
+  })
+
+  const { paidByRef } = await getPaidByRefForPeriod(refCodes, startUtc, endUtc)
+
+  let earnings = new Prisma.Decimal(0)
+  referrals.forEach((ref) => {
+    const totalPaid = paidByRef.get(ref.code) ?? new Prisma.Decimal(0)
+    const rate = ref.earningRate ?? BASE_EARNING_RATE
+    earnings = earnings.add(totalPaid.mul(rate))
+  })
+
+  return { uniqueUsers, earnings }
+}
+
+const getAdminPartnerRevenueForPeriod = async (
+  excludePartnerId: string | null,
+  startUtc: Date,
+  endUtc: Date,
+): Promise<Prisma.Decimal> => {
+  const referrals = await prisma.partnerReferral.findMany({
+    ...(excludePartnerId ? { where: { partnerId: { not: excludePartnerId } } } : {}),
+    orderBy: { createdAt: 'asc' },
+  })
+
+  const refCodes = referrals.map((ref) => ref.code)
+  const { paidByRef } = await getPaidByRefForPeriod(refCodes, startUtc, endUtc)
+
+  let adminRevenue = new Prisma.Decimal(0)
+  referrals.forEach((ref) => {
+    const totalPaid = paidByRef.get(ref.code) ?? new Prisma.Decimal(0)
+    const rate = ref.earningRate ?? BASE_EARNING_RATE
+    const adminRate = ACQUIRING_NET_RATE.sub(rate)
+    adminRevenue = adminRevenue.add(totalPaid.mul(adminRate))
+  })
+
+  if (adminRevenue.isNegative()) adminRevenue = new Prisma.Decimal(0)
+  return adminRevenue
+}
+
+const getHasPrevPeriod = async (refCodes: string[], type: AnalyticsType, startMskMs: number): Promise<boolean> => {
+  if (!refCodes.length) return false
+
+  const earliestUser = await prisma.user.aggregate({
+    where: { refSource: { in: refCodes } },
+    _min: { createdAt: true },
+  })
+
+  const earliestDate = earliestUser._min.createdAt
+  if (!earliestDate) return false
+
+  const earliestStartMskMs = getPeriodStartMskMsForUtc(earliestDate, type)
+  return startMskMs > earliestStartMskMs
+}
+
 const sendOrEdit = async (
   ctx: any,
   text: string,
@@ -425,6 +633,87 @@ const sendMainMenu = async (ctx: any, opts?: { clearNotices?: boolean }) => {
   await sendControlMessage(ctx, text, buildMainMenu(admin, walletLabel, withdrawCount))
 }
 
+const buildAnalyticsKeyboard = (
+  type: AnalyticsType,
+  offset: number,
+  focusStartMskMs: number,
+  hasPrev: boolean,
+  hasNext: boolean,
+) => {
+  const activePrefix = '🔹 '
+  const typeLabel = (key: AnalyticsType) => {
+    if (key === 'MONTH') return 'Месяц'
+    if (key === 'WEEK') return 'Неделя'
+    return 'День'
+  }
+
+  const typeButton = (key: AnalyticsType) => {
+    const isActive = key === type
+    const text = isActive ? `${activePrefix}${typeLabel(key)}` : typeLabel(key)
+    return Markup.button.callback(
+      text,
+      isActive ? 'ANALYTICS_NOOP' : `ANALYTICS_TYPE:${key}:${focusStartMskMs}`,
+    )
+  }
+
+  const rows: any[] = []
+  rows.push([typeButton('MONTH'), typeButton('WEEK'), typeButton('DAY')])
+
+  const navRow: any[] = []
+  const spacer = Markup.button.callback('⠀', 'ANALYTICS_NOOP')
+  if (hasPrev) {
+    navRow.push(Markup.button.callback('⬅️', `ANALYTICS_NAV:${type}:${offset - 1}`))
+  } else {
+    navRow.push(spacer)
+  }
+  navRow.push(spacer)
+  if (hasNext) {
+    navRow.push(Markup.button.callback('➡️', `ANALYTICS_NAV:${type}:${offset + 1}`))
+  } else {
+    navRow.push(spacer)
+  }
+
+  rows.push(navRow)
+  rows.push([Markup.button.callback('⬅️ Назад', 'MAIN_MENU')])
+
+  return Markup.inlineKeyboard(rows)
+}
+
+const sendAnalytics = async (ctx: any, type: AnalyticsType, offset: number) => {
+  const admin = isAdmin(ctx.from?.id)
+  const telegramId = String(ctx.from.id)
+  const partner = await ensurePartner(telegramId)
+  const { startUtc, endUtc, startMskMs, endMskMs, label } = getPeriodRange(type, offset)
+
+  const partnerStats = await getPartnerPeriodStats(partner.id, startUtc, endUtc)
+  const adminRevenue = admin ? await getAdminPartnerRevenueForPeriod(partner.id, startUtc, endUtc) : null
+
+  const refsForPrev = admin
+    ? await prisma.partnerReferral.findMany({ select: { code: true } })
+    : await prisma.partnerReferral.findMany({ where: { partnerId: partner.id }, select: { code: true } })
+  const refCodes = refsForPrev.map((ref) => ref.code)
+  const hasPrev = await getHasPrevPeriod(refCodes, type, startMskMs)
+  const hasNext = offset < 0
+
+  const rows = [
+    '📊 <b>Аналитика</b>',
+    `Период: ${label}`,
+    '',
+    `✨ Уникальные пользователи: ${formatCountUi(partnerStats.uniqueUsers)}`,
+  ]
+  if (admin) {
+    rows.push(`🤝 Заработано на партнёрах: ${formatMoneyUi(adminRevenue ?? new Prisma.Decimal(0))} ₽`)
+  }
+  const totalAll = admin
+    ? partnerStats.earnings.add(adminRevenue ?? new Prisma.Decimal(0))
+    : partnerStats.earnings
+  rows.push(`🏆 Заработано всего за период: ${formatMoneyUi(totalAll)} ₽`)
+
+  const keyboard = buildAnalyticsKeyboard(type, offset, startMskMs, hasPrev, hasNext)
+  await clearListForUser(ctx)
+  await sendControlMessage(ctx, rows.join('\n'), keyboard)
+}
+
 const sendRefList = async (ctx: any) => {
   const rawPage = ctx.match?.[1] ?? ctx.state?.page
   const page = Number.isFinite(Number(rawPage)) ? Number(rawPage) : 1
@@ -522,6 +811,73 @@ bot.action(
     await clearSession(String(ctx.from.id))
     await clearListForUser(ctx)
     await sendMainMenu(ctx, { clearNotices: true })
+  }),
+)
+
+bot.action(
+  'ANALYTICS',
+  withErrorHandling(async (ctx) => {
+    await ctx.answerCbQuery().catch(() => {})
+    await clearSession(String(ctx.from.id))
+    await sendAnalytics(ctx, ANALYTICS_DEFAULT_TYPE, 0)
+  }),
+)
+
+bot.action(
+  /^ANALYTICS_NAV:(DAY|WEEK|MONTH):(-?\d+)$/,
+  withErrorHandling(async (ctx) => {
+    await ctx.answerCbQuery().catch(() => {})
+    await clearSession(String(ctx.from.id))
+    const type = ctx.match[1] as AnalyticsType
+    const offset = Number(ctx.match[2])
+    if (!Number.isFinite(offset)) {
+      await sendAnalytics(ctx, ANALYTICS_DEFAULT_TYPE, 0)
+      return
+    }
+    await sendAnalytics(ctx, type, offset)
+  }),
+)
+
+const getOffsetFromFocus = (type: AnalyticsType, focusStartMskMs: number): number => {
+  const current = getPeriodRange(type, 0)
+  const currentStart = current.startMskMs
+
+  if (type === 'DAY') {
+    return Math.round((focusStartMskMs - currentStart) / DAY_MS)
+  }
+  if (type === 'WEEK') {
+    return Math.round((focusStartMskMs - currentStart) / (7 * DAY_MS))
+  }
+
+  const focus = new Date(focusStartMskMs)
+  const currentDate = new Date(currentStart)
+  const focusYear = focus.getUTCFullYear()
+  const focusMonth = focus.getUTCMonth()
+  const currentYear = currentDate.getUTCFullYear()
+  const currentMonth = currentDate.getUTCMonth()
+  return (focusYear - currentYear) * 12 + (focusMonth - currentMonth)
+}
+
+bot.action(
+  /^ANALYTICS_TYPE:(DAY|WEEK|MONTH):(\d{12,13})$/,
+  withErrorHandling(async (ctx) => {
+    await ctx.answerCbQuery().catch(() => {})
+    await clearSession(String(ctx.from.id))
+    const type = ctx.match[1] as AnalyticsType
+    const focusStartMskMs = Number(ctx.match[2])
+    if (!Number.isFinite(focusStartMskMs)) {
+      await sendAnalytics(ctx, ANALYTICS_DEFAULT_TYPE, 0)
+      return
+    }
+    const offset = getOffsetFromFocus(type, focusStartMskMs)
+    await sendAnalytics(ctx, type, offset)
+  }),
+)
+
+bot.action(
+  'ANALYTICS_NOOP',
+  withErrorHandling(async (ctx) => {
+    await ctx.answerCbQuery().catch(() => {})
   }),
 )
 
