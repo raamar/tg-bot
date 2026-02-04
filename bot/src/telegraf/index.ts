@@ -201,7 +201,7 @@ bot.start(
 
     const message: any = ctx.message
     const text: string | undefined = message?.text
-    const ref = text?.split(' ')[1] || null
+    const ref = text?.split(' ')[1] || 'noref'
 
     const telegramId = String(id)
     const existing = await prisma.user.findUnique({
