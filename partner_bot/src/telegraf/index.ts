@@ -172,9 +172,9 @@ const generateReferralCode = async (): Promise<string> => {
 const buildMainMenu = (admin: boolean, walletLabel: string, withdrawCount: number) => {
   const rows: Array<Array<ReturnType<typeof Markup.button.callback> | ReturnType<typeof Markup.button.url>>> = [
     [Markup.button.callback('🔄 Обновить статистику', 'REFRESH_STATS')],
-    [Markup.button.callback('📊 Аналитика', 'ANALYTICS')],
-    [Markup.button.callback('🏆 ТОП партнёров', 'TOP_PARTNERS')],
     [Markup.button.callback('🔗 Реф. ссылки', 'REF_LIST')],
+    [Markup.button.callback('🏆 ТОП партнёров', 'TOP_PARTNERS')],
+    [Markup.button.callback('📊 Аналитика', 'ANALYTICS')],
     [Markup.button.callback(walletLabel, 'WALLET_SET')],
     [Markup.button.callback('💸 Запросить вывод', 'WITHDRAW_REQUEST')],
   ]
