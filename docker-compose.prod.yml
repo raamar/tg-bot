@@ -26,9 +26,7 @@ services:
       - traefik_net
 
   api:
-    build:
-      context: .
-      dockerfile: ./api/Dockerfile
+    image: localhost:5000/bot-a-api:latest
     environment:
       - NODE_ENV=production
       - REDIS_URL=redis://redis:6379
@@ -55,9 +53,7 @@ services:
       - traefik_net
 
   db-migrate:
-    build:
-      context: .
-      dockerfile: ./packages/db/Dockerfile.migrate
+    image: localhost:5000/bot-a-db-migrate:latest
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
     depends_on:
@@ -66,9 +62,7 @@ services:
       - default
 
   bot:
-    build:
-      context: .
-      dockerfile: ./bot/Dockerfile
+    image: localhost:5000/bot-a-bot:latest
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - REDIS_URL=redis://redis:6379
@@ -93,9 +87,7 @@ services:
     networks:
       - default
   partner_bot:
-    build:
-      context: .
-      dockerfile: ./partner_bot/Dockerfile
+    image: localhost:5000/bot-a-partner-bot:latest
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - REDIS_URL=redis://redis:6379
