@@ -12,7 +12,14 @@ import { getMenuMessage, setMenuMessage } from '../helpers/menuMessage'
 import { clearListMessages, getListMessages, pushListMessage } from '../helpers/listMessages'
 import { clearNoticeMessages, getNoticeMessages, pushNoticeMessage } from '../helpers/noticeMessages'
 import { exportPartnerRefsCsvToTempFile } from '../helpers/exportPartnerRefsCsv'
-import { BASE_EARNING_RATE, formatMoney, formatPercent, parseAmount, parsePercent } from '../helpers/money'
+import {
+  BASE_EARNING_RATE,
+  formatCountUi,
+  formatMoneyUi,
+  formatPercentUi,
+  parseAmount,
+  parsePercent,
+} from '../helpers/money'
 
 if (process.env.TELEGRAM_TOKEN_2 === undefined) {
   throw new Error('TELEGRAM_TOKEN_2 is not defined')
@@ -37,10 +44,12 @@ const throttler = telegrafThrottler({
 bot.use(throttler)
 
 const REF_LIMIT = 10
-const REF_PAGE_SIZE = 3
-const WITHDRAW_PAGE_SIZE = 3
+const REF_PAGE_SIZE = 5
+const WITHDRAW_PAGE_SIZE = 5
 const MAIN_BOT_USERNAME = process.env.TELEGRAM_BOT_USERNAME
 const REF_CODE_REGEX = /^[A-Za-z0-9_-]{3,32}$/
+const ACQUIRING_FEE_RATE = new Prisma.Decimal(process.env.ACQUIRING_FEE_RATE ?? '0.11')
+const ACQUIRING_NET_RATE = new Prisma.Decimal(1).sub(ACQUIRING_FEE_RATE)
 
 const escapeHtml = (value: string): string => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
@@ -83,7 +92,7 @@ const generateReferralCode = async (): Promise<string> => {
 }
 
 const buildMainMenu = (admin: boolean, walletLabel: string, withdrawCount: number) => {
-  const rows = [
+  const rows: Array<Array<ReturnType<typeof Markup.button.callback> | ReturnType<typeof Markup.button.url>>> = [
     [Markup.button.callback('🔄 Обновить статистику', 'REFRESH_STATS')],
     [Markup.button.callback('🔗 Реф. ссылки', 'REF_LIST')],
     [Markup.button.callback(walletLabel, 'WALLET_SET')],
@@ -96,6 +105,8 @@ const buildMainMenu = (admin: boolean, walletLabel: string, withdrawCount: numbe
     rows.push([Markup.button.callback('📥 CSV выгрузка', 'ADMIN_EXPORT_CSV')])
     rows.push([Markup.button.callback('🧮 Изменить ставку реф. ссылки', 'ADMIN_RATE_REF')])
   }
+
+  rows.push([Markup.button.url('🛠 Тех. поддержка', 'https://t.me/only_neuro_chat')])
 
   return Markup.inlineKeyboard(rows)
 }
@@ -125,24 +136,30 @@ const getPartnerStats = async (partnerId: string) => {
   })
 
   const userIds = users.map((user) => user.id)
-  const paymentSums: Array<{ userId: string; _sum: { amount: Prisma.Decimal | null } }> = []
+  const lastPaidByUserId = new Map<string, Prisma.Decimal>()
 
   const chunkSize = 5000
   for (let i = 0; i < userIds.length; i += chunkSize) {
     const chunk = userIds.slice(i, i + chunkSize)
-    const batch = await prisma.payment.groupBy({
-      by: ['userId'],
+    const payments = await prisma.payment.findMany({
       where: { status: 'PAID', userId: { in: chunk } },
-      _sum: { amount: true },
+      select: { userId: true, amount: true, paidAt: true, createdAt: true },
+      orderBy: [{ userId: 'asc' }, { paidAt: 'desc' }, { createdAt: 'desc' }],
     })
-    paymentSums.push(...batch)
+
+    for (const payment of payments) {
+      if (!lastPaidByUserId.has(payment.userId)) {
+        lastPaidByUserId.set(payment.userId, payment.amount)
+      }
+    }
   }
 
   const paidByRef = new Map<string, Prisma.Decimal>()
-  paymentSums.forEach((row) => {
-    const refSource = userRefById.get(row.userId)
+  users.forEach((user) => {
+    const refSource = user.refSource
     if (!refSource) return
-    const amount = row._sum.amount ?? new Prisma.Decimal(0)
+    const amount = lastPaidByUserId.get(user.id)
+    if (!amount) return
     const current = paidByRef.get(refSource) ?? new Prisma.Decimal(0)
     paidByRef.set(refSource, current.add(amount))
   })
@@ -191,6 +208,68 @@ const getPartnerStats = async (partnerId: string) => {
       available,
     },
   }
+}
+
+const getAdminPartnerRevenue = async (excludePartnerId: string | null) => {
+  const referrals = await prisma.partnerReferral.findMany({
+    ...(excludePartnerId ? { where: { partnerId: { not: excludePartnerId } } } : {}),
+    orderBy: { createdAt: 'asc' },
+  })
+
+  const refCodes = referrals.map((ref) => ref.code)
+  const users =
+    refCodes.length === 0
+      ? []
+      : await prisma.user.findMany({
+          where: { refSource: { in: refCodes } },
+          select: { id: true, refSource: true },
+        })
+
+  const userRefById = new Map<string, string>()
+  users.forEach((user) => {
+    if (!user.refSource) return
+    userRefById.set(user.id, user.refSource)
+  })
+
+  const userIds = users.map((user) => user.id)
+  const lastPaidByUserId = new Map<string, Prisma.Decimal>()
+
+  const chunkSize = 5000
+  for (let i = 0; i < userIds.length; i += chunkSize) {
+    const chunk = userIds.slice(i, i + chunkSize)
+    const payments = await prisma.payment.findMany({
+      where: { status: 'PAID', userId: { in: chunk } },
+      select: { userId: true, amount: true, paidAt: true, createdAt: true },
+      orderBy: [{ userId: 'asc' }, { paidAt: 'desc' }, { createdAt: 'desc' }],
+    })
+
+    for (const payment of payments) {
+      if (!lastPaidByUserId.has(payment.userId)) {
+        lastPaidByUserId.set(payment.userId, payment.amount)
+      }
+    }
+  }
+
+  const paidByRef = new Map<string, Prisma.Decimal>()
+  users.forEach((user) => {
+    const refSource = user.refSource
+    if (!refSource) return
+    const amount = lastPaidByUserId.get(user.id)
+    if (!amount) return
+    const current = paidByRef.get(refSource) ?? new Prisma.Decimal(0)
+    paidByRef.set(refSource, current.add(amount))
+  })
+
+  let adminRevenue = new Prisma.Decimal(0)
+  referrals.forEach((ref) => {
+    const totalPaid = paidByRef.get(ref.code) ?? new Prisma.Decimal(0)
+    const rate = ref.earningRate ?? BASE_EARNING_RATE
+    const adminRate = ACQUIRING_NET_RATE.sub(rate)
+    adminRevenue = adminRevenue.add(totalPaid.mul(adminRate))
+  })
+
+  if (adminRevenue.isNegative()) adminRevenue = new Prisma.Decimal(0)
+  return { adminRevenue }
 }
 
 const sendOrEdit = async (
@@ -310,21 +389,33 @@ const sendMainMenu = async (ctx: any, opts?: { clearNotices?: boolean }) => {
   const withdrawCount = admin
     ? await prisma.partnerWithdrawal.count({ where: { status: PartnerWithdrawalStatus.IN_REVIEW } })
     : 0
+  const adminRevenue = admin ? (await getAdminPartnerRevenue(partner.id)).adminRevenue : new Prisma.Decimal(0)
 
   const walletLine = partner.usdtWallet
     ? `👛 USDT кошелёк: ${escapeHtml(partner.usdtWallet)}`
     : '👛 USDT кошелёк: не указан'
 
-  const text = [
-    '⚙️ <b>Меню партнёра</b> ⚙️',
-    `🔗 Реф. ссылок: ${stats.items.length}`,
-    `✨ Уникальные пользователи: ${stats.totals.totalUsers}`,
-    `💸 Заработано всего: ${formatMoney(stats.totals.totalEarnings)} ₽`,
-    `🎉 <b>Доступно к выводу: ${formatMoney(stats.totals.available)} ₽</b>`,
-    `⏳ В ожидании выплаты: ${formatMoney(stats.totals.pending)} ₽`,
-    `💲 Выплачено: ${formatMoney(stats.totals.approved)} ₽`,
-    walletLine,
-  ].join('\n')
+  const textRows = [
+    '⚙️ <b>Меню партнёра</b> ⚙️\n',
+    `🔗 Реф. ссылок: ${formatCountUi(stats.items.length)}`,
+    `✨ Уникальные пользователи: ${formatCountUi(stats.totals.totalUsers)}`,
+  ]
+
+  if (admin) {
+    const totalAll = stats.totals.totalEarnings.add(adminRevenue)
+    textRows.push(`🔗 Заработано на реф. ссылках: ${formatMoneyUi(stats.totals.totalEarnings)} ₽`)
+    textRows.push(`🤝 Заработано на партнерах: ${formatMoneyUi(adminRevenue)} ₽`)
+    textRows.push(`🏆 Заработано всего: ${formatMoneyUi(totalAll)} ₽`)
+  } else {
+    textRows.push(`💸 Заработано всего: ${formatMoneyUi(stats.totals.totalEarnings)} ₽`)
+  }
+
+  textRows.push(`🎉 <b>Доступно к выводу: ${formatMoneyUi(stats.totals.available)} ₽</b>`)
+  textRows.push(`⏳ В ожидании выплаты: ${formatMoneyUi(stats.totals.pending)} ₽`)
+  textRows.push(`💲 Выплачено: ${formatMoneyUi(stats.totals.approved)} ₽`)
+  textRows.push(walletLine)
+
+  const text = textRows.join('\n')
 
   const walletLabel = partner.usdtWallet ? '✏️ Изменить кошелёк' : '➕ Указать кошелёк'
   await clearListForUser(ctx)
@@ -567,8 +658,8 @@ bot.action(
       `<b>Реф. ссылка:</b> ${escapeHtml(referral.name || referral.code)}`,
       `Код: ${escapeHtml(referral.code)}`,
       formatCodeBlock(buildRefLink(referral.code)),
-      `✨ Уникальные пользователи: ${item.users}`,
-      `💸 Заработано всего: ${formatMoney(item.earnings)} ₽`,
+      `✨ Уникальные пользователи: ${formatCountUi(item.users)}`,
+      `💸 Заработано всего: ${formatMoneyUi(item.earnings)} ₽`,
     ].join('\n')
 
     await sendControlMessage(ctx, text, Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'REF_LIST')]]))
@@ -626,7 +717,7 @@ bot.action(
     await setSession(telegramId, { action: 'WITHDRAW_AMOUNT' })
     await sendControlMessage(
       ctx,
-      `Введите сумму для вывода (доступно ${formatMoney(stats.totals.available)} ₽) или нажмите «Вывести всё».`,
+      `Введите сумму для вывода (доступно ${formatMoneyUi(stats.totals.available)} ₽) или нажмите «Вывести всё».`,
       Markup.inlineKeyboard([
         [Markup.button.callback('💸 Вывести всё', 'WITHDRAW_ALL')],
         [Markup.button.callback('⬅️ Назад', 'MAIN_MENU')],
@@ -724,7 +815,7 @@ bot.action(
         `Партнёр: ${partnerLabel}`,
         `Telegram ID: ${withdrawal.partner.telegramId}`,
         `Кошелёк: ${withdrawal.partner.usdtWallet || 'не указан'}`,
-        `Сумма: ${formatMoney(withdrawal.amount)} ₽`,
+        `Сумма: ${formatMoneyUi(withdrawal.amount)} ₽`,
       ].join('\n')
 
       const sent = await ctx.reply(text, {
@@ -996,12 +1087,15 @@ bot.on(
       const currentRate = referral.earningRate ?? BASE_EARNING_RATE
       await setSession(telegramId, { action: 'ADMIN_RATE_REF_VALUE', referralId: referral.id })
 
+      const feePercent = formatPercentUi(ACQUIRING_FEE_RATE)
       const text = [
         `<b>Реф. ссылка:</b> ${escapeHtml(referral.name || referral.code)}`,
         `Код: ${escapeHtml(referral.code)}`,
         '',
-        `Текущая ставка: ${formatPercent(currentRate)}%`,
-        'Базовая ставка считается так: (100% - 11%) x 70% = 62.3%',
+        `Текущая ставка: ${formatPercentUi(currentRate)}%`,
+        `Комиссия эквайринга: ${feePercent}%`,
+        `Базовая ставка считается так: (100% - ${feePercent}%) x 70% = 62.3%`,
+        `Важно: если указать больше ${formatPercentUi(ACQUIRING_NET_RATE)}%, админ уйдёт в минус.`,
         '',
         'Введите новый процент выплат (например 62.3).',
       ].join('\n')
@@ -1141,13 +1235,16 @@ bot.on(
         withdrawal.partner.telegramId,
         [
           '✅ Ваша заявка на вывод одобрена!',
-          `💸 Сумма: ${formatMoney(withdrawal.amount)} ₽`,
+          `💸 Сумма: ${formatMoneyUi(withdrawal.amount)} ₽`,
           `🔗 Ссылка на выплату: ${escapeHtml(linkText)}`,
           '<b>🔥 Ожидайте, выплата придёт в течении 5-30 минут!</b>',
         ].join('\n'),
-        { parse_mode: 'HTML', link_preview_options: {
-          is_disabled: true
-        } },
+        {
+          parse_mode: 'HTML',
+          link_preview_options: {
+            is_disabled: true,
+          },
+        },
       )
 
       return
@@ -1158,21 +1255,21 @@ bot.on(
 const createWithdrawalRequest = async (ctx: any, partner: any, amount: Prisma.Decimal) => {
   const telegramId = String(ctx.from.id)
   const stats = await getPartnerStats(partner.id)
-  const normalizedAmount = new Prisma.Decimal(Math.floor(amount.toNumber()))
-  if (normalizedAmount.lte(0)) {
+  const roundedAmount = amount.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP)
+  if (roundedAmount.lte(0)) {
     await sendNotice(ctx, 'Сумма должна быть больше 0.')
     return
   }
 
-  if (normalizedAmount.gt(stats.totals.available)) {
-    await sendNotice(ctx, `Сумма превышает доступный баланс (${formatMoney(stats.totals.available)} ₽).`)
+  if (roundedAmount.gt(stats.totals.available)) {
+    await sendNotice(ctx, `Сумма превышает доступный баланс (${formatMoneyUi(stats.totals.available)} ₽).`)
     return
   }
 
   const withdrawal = await prisma.partnerWithdrawal.create({
     data: {
       partnerId: partner.id,
-      amount: normalizedAmount,
+      amount: roundedAmount,
       status: PartnerWithdrawalStatus.IN_REVIEW,
     },
   })
@@ -1187,7 +1284,7 @@ const createWithdrawalRequest = async (ctx: any, partner: any, amount: Prisma.De
       '🧾 Новая заявка на вывод',
       `ID: ${withdrawal.id}`,
       `Партнёр: ${partner.username || partner.telegramId}`,
-      `Сумма: ${formatMoney(withdrawal.amount)} ₽`,
+      `Сумма: ${formatMoneyUi(withdrawal.amount)} ₽`,
     ].join('\n')
 
     await Promise.allSettled(

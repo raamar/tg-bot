@@ -4,7 +4,7 @@ import path from 'path'
 import { once } from 'events'
 import type { PrismaClient } from '@app/db'
 import { Prisma, PartnerWithdrawalStatus } from '@app/db'
-import { BASE_EARNING_RATE, formatMoney } from './money'
+import { BASE_EARNING_RATE, formatMoneyCsv } from './money'
 
 const CSV_DELIMITER = ';'
 const UTF8_BOM = '\ufeff'
@@ -56,24 +56,30 @@ export const exportPartnerRefsCsvToTempFile = async (
   })
 
   const userIds = users.map((user) => user.id)
-  const paymentSums: Array<{ userId: string; _sum: { amount: Prisma.Decimal | null } }> = []
+  const lastPaidByUserId = new Map<string, Prisma.Decimal>()
 
   const chunkSize = 5000
   for (let i = 0; i < userIds.length; i += chunkSize) {
     const chunk = userIds.slice(i, i + chunkSize)
-    const batch = await prisma.payment.groupBy({
-      by: ['userId'],
+    const payments = await prisma.payment.findMany({
       where: { status: 'PAID', userId: { in: chunk } },
-      _sum: { amount: true },
+      select: { userId: true, amount: true, paidAt: true, createdAt: true },
+      orderBy: [{ userId: 'asc' }, { paidAt: 'desc' }, { createdAt: 'desc' }],
     })
-    paymentSums.push(...batch)
+
+    for (const payment of payments) {
+      if (!lastPaidByUserId.has(payment.userId)) {
+        lastPaidByUserId.set(payment.userId, payment.amount)
+      }
+    }
   }
 
   const paidByRef = new Map<string, Prisma.Decimal>()
-  paymentSums.forEach((row) => {
-    const refSource = userRefById.get(row.userId)
+  users.forEach((user) => {
+    const refSource = user.refSource
     if (!refSource) return
-    const amount = row._sum.amount ?? new Prisma.Decimal(0)
+    const amount = lastPaidByUserId.get(user.id)
+    if (!amount) return
     const current = paidByRef.get(refSource) ?? new Prisma.Decimal(0)
     paidByRef.set(refSource, current.add(amount))
   })
@@ -136,7 +142,7 @@ export const exportPartnerRefsCsvToTempFile = async (
       const totalPartnerEarnings = partnerEarnings.get(ref.partnerId) ?? new Prisma.Decimal(0)
       const available = totalPartnerEarnings.sub(paidOut).sub(pending)
 
-      const ratePercent = formatMoney(rate.mul(100))
+      const ratePercent = formatMoneyCsv(rate.mul(100))
       const row = [
         ref.partnerId,
         ref.partner.telegramId,
@@ -145,11 +151,11 @@ export const exportPartnerRefsCsvToTempFile = async (
         ref.name || ref.code,
         ratePercent,
         countsByRef.get(ref.code) ?? 0,
-        formatMoney(totalPaid),
-        formatMoney(earnings),
-        formatMoney(paidOut),
-        formatMoney(pending),
-        formatMoney(available),
+        formatMoneyCsv(totalPaid),
+        formatMoneyCsv(earnings),
+        formatMoneyCsv(paidOut),
+        formatMoneyCsv(pending),
+        formatMoneyCsv(available),
       ]
 
       await writeChunk(out, row.map(csvEscape).join(CSV_DELIMITER) + '\n')
