@@ -173,6 +173,7 @@ const buildMainMenu = (admin: boolean, walletLabel: string, withdrawCount: numbe
   const rows: Array<Array<ReturnType<typeof Markup.button.callback> | ReturnType<typeof Markup.button.url>>> = [
     [Markup.button.callback('🔄 Обновить статистику', 'REFRESH_STATS')],
     [Markup.button.callback('📊 Аналитика', 'ANALYTICS')],
+    [Markup.button.callback('🏆 ТОП партнёров', 'TOP_PARTNERS')],
     [Markup.button.callback('🔗 Реф. ссылки', 'REF_LIST')],
     [Markup.button.callback(walletLabel, 'WALLET_SET')],
     [Markup.button.callback('💸 Запросить вывод', 'WITHDRAW_REQUEST')],
@@ -478,6 +479,117 @@ const getHasPrevPeriod = async (refCodes: string[], type: AnalyticsType, startMs
 
   const earliestStartMskMs = getPeriodStartMskMsForUtc(earliestDate, type)
   return startMskMs > earliestStartMskMs
+}
+
+const maskLabel = (value: string): string => {
+  const trimmed = value.trim()
+  if (!trimmed) return '...'
+  return `${trimmed.slice(0, 3)}...`
+}
+
+const getTopPartnersForPeriod = async (startUtc: Date, endUtc: Date) => {
+  const referrals = await prisma.partnerReferral.findMany({
+    include: { partner: true },
+    orderBy: { createdAt: 'asc' },
+  })
+
+  const refCodes = referrals.map((ref) => ref.code)
+  const { paidByRef } = await getPaidByRefForPeriod(refCodes, startUtc, endUtc)
+
+  const earningsByPartner = new Map<string, Prisma.Decimal>()
+  const partnerById = new Map<string, (typeof referrals)[number]['partner']>()
+
+  referrals.forEach((ref) => {
+    partnerById.set(ref.partnerId, ref.partner)
+    const totalPaid = paidByRef.get(ref.code) ?? new Prisma.Decimal(0)
+    const rate = ref.earningRate ?? BASE_EARNING_RATE
+    const current = earningsByPartner.get(ref.partnerId) ?? new Prisma.Decimal(0)
+    earningsByPartner.set(ref.partnerId, current.add(totalPaid.mul(rate)))
+  })
+
+  const list = Array.from(earningsByPartner.entries())
+    .map(([partnerId, earnings]) => ({
+      partnerId,
+      earnings,
+      partner: partnerById.get(partnerId),
+    }))
+    .filter((row) => row.partner)
+    .sort((a, b) => b.earnings.comparedTo(a.earnings))
+
+  return list as Array<{ partnerId: string; earnings: Prisma.Decimal; partner: any }>
+}
+
+const buildTopPartnersKeyboard = (offset: number, hasPrev: boolean, hasNext: boolean) => {
+  const rows: any[] = []
+  const navRow: any[] = []
+  const spacer = Markup.button.callback('⠀', 'TOP_NOOP')
+  if (hasPrev) {
+    navRow.push(Markup.button.callback('⬅️', `TOP_NAV:${offset - 1}`))
+  } else {
+    navRow.push(spacer)
+  }
+  navRow.push(spacer)
+  if (hasNext) {
+    navRow.push(Markup.button.callback('➡️', `TOP_NAV:${offset + 1}`))
+  } else {
+    navRow.push(spacer)
+  }
+  rows.push(navRow)
+  rows.push([Markup.button.callback('⬅️ Назад', 'MAIN_MENU')])
+  return Markup.inlineKeyboard(rows)
+}
+
+const sendTopPartners = async (ctx: any, offset: number) => {
+  const adminViewer = isAdmin(ctx.from?.id)
+  const telegramId = String(ctx.from.id)
+  const partner = await ensurePartner(telegramId)
+
+  const { startUtc, endUtc, startMskMs, label } = getPeriodRange('MONTH', offset)
+
+  const topList = await getTopPartnersForPeriod(startUtc, endUtc)
+  const top10 = topList.slice(0, 10)
+
+  const refs = await prisma.partnerReferral.findMany({ select: { code: true } })
+  const refCodes = refs.map((ref) => ref.code)
+  const hasPrev = await getHasPrevPeriod(refCodes, 'MONTH', startMskMs)
+  const hasNext = offset < 0
+
+  const rows: string[] = [
+    '🏆 <b>ТОП партнёров</b>',
+    `Период: ${label}`,
+    '',
+    'Топ-10 партнёров, по чистому заработку (после вычета всееех комиссий) - прямо сейчас!',
+    '',
+    'Твоя цель - быть здесь! 👑',
+    '',
+  ]
+
+  if (!top10.length) {
+    rows.push('Пока нет данных.')
+  } else {
+    top10.forEach((item, index) => {
+      const p = item.partner
+      const isAdminPartner = p && isAdmin(Number(p.telegramId))
+      let display = ''
+      if (adminViewer) {
+        display = isAdminPartner ? 'Админ' : p.username || p.telegramId
+      } else {
+        if (isAdminPartner) {
+          display = 'Админ'
+        } else {
+          const base = p.username || p.telegramId
+          display = maskLabel(String(base))
+        }
+      }
+
+      const youLabel = p && p.id === partner.id ? ' (это вы)' : ''
+      rows.push(`${index + 1}. ${escapeHtml(display)}${youLabel} — ${formatMoneyUi(item.earnings)} ₽`)
+    })
+  }
+
+  const keyboard = buildTopPartnersKeyboard(offset, hasPrev, hasNext)
+  await clearListForUser(ctx)
+  await sendControlMessage(ctx, rows.join('\n'), keyboard)
 }
 
 const sendOrEdit = async (
@@ -820,6 +932,36 @@ bot.action(
     await ctx.answerCbQuery().catch(() => {})
     await clearSession(String(ctx.from.id))
     await sendAnalytics(ctx, ANALYTICS_DEFAULT_TYPE, 0)
+  }),
+)
+
+bot.action(
+  'TOP_PARTNERS',
+  withErrorHandling(async (ctx) => {
+    await ctx.answerCbQuery().catch(() => {})
+    await clearSession(String(ctx.from.id))
+    await sendTopPartners(ctx, 0)
+  }),
+)
+
+bot.action(
+  /^TOP_NAV:(-?\d+)$/,
+  withErrorHandling(async (ctx) => {
+    await ctx.answerCbQuery().catch(() => {})
+    await clearSession(String(ctx.from.id))
+    const offset = Number(ctx.match[1])
+    if (!Number.isFinite(offset)) {
+      await sendTopPartners(ctx, 0)
+      return
+    }
+    await sendTopPartners(ctx, offset)
+  }),
+)
+
+bot.action(
+  'TOP_NOOP',
+  withErrorHandling(async (ctx) => {
+    await ctx.answerCbQuery().catch(() => {})
   }),
 )
 
