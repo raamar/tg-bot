@@ -1,14 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -lt 1 ]]; then
-  echo "Usage: $0 <ssh_alias|user@host> [ssh_port]"
-  exit 1
-fi
-
-SSH_TARGET="$1"
-SSH_PORT="${2:-22}"
-REGISTRY_HOST="localhost:5000"
+PUSH_PORT="${1:-5000}"
+REGISTRY_HOST="127.0.0.1:${PUSH_PORT}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
@@ -16,24 +10,7 @@ log() {
   printf "[%s] %s\n" "$(date +'%H:%M:%S')" "$*"
 }
 
-start_tunnel() {
-  log "Opening SSH tunnel to ${SSH_TARGET}:${SSH_PORT} -> ${REGISTRY_HOST}"
-  ssh -N -L 5000:127.0.0.1:5000 -p "${SSH_PORT}" -o ExitOnForwardFailure=yes "${SSH_TARGET}" &
-  TUNNEL_PID=$!
-  sleep 1
-  if ! kill -0 "${TUNNEL_PID}" 2>/dev/null; then
-    log "SSH tunnel failed. Check SSH alias/host and port."
-    exit 1
-  fi
-}
-
-stop_tunnel() {
-  if [[ -n "${TUNNEL_PID:-}" ]]; then
-    kill "${TUNNEL_PID}" >/dev/null 2>&1 || true
-  fi
-}
-
-trap stop_tunnel EXIT
+log "Using registry ${REGISTRY_HOST}"
 
 build_image() {
   local name="$1"
@@ -55,8 +32,6 @@ push_image() {
   docker push "${REGISTRY_HOST}/${name}:latest"
   log "DONE  ${name}"
 }
-
-start_tunnel
 
 COMPOSE_FILE="${ROOT_DIR}/docker-compose.prod.yml"
 if rg -q "^[[:space:]]*build:" "${COMPOSE_FILE}"; then
