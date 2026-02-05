@@ -516,8 +516,8 @@ const getHasPrevPeriod = async (refCodes: string[], type: AnalyticsType, startMs
 
 const maskLabel = (value: string): string => {
   const trimmed = value.trim()
-  if (!trimmed) return '...'
-  return `${trimmed.slice(0, 3)}...`
+  if (!trimmed) return '***'
+  return '*'.repeat(trimmed.length)
 }
 
 const getTopPartnersForPeriod = async (startUtc: Date, endUtc: Date) => {
@@ -581,6 +581,8 @@ const sendTopPartners = async (ctx: any, offset: number) => {
 
   const topList = await getTopPartnersForPeriod(startUtc, endUtc)
   const top10 = topList.slice(0, 10)
+  const viewerIndex = topList.findIndex((item) => item.partnerId === partner.id)
+  const viewerRank = viewerIndex >= 0 ? viewerIndex + 1 : null
 
   const refs = await prisma.partnerReferral.findMany({ select: { code: true } })
   const refCodes = refs.map((ref) => ref.code)
@@ -619,6 +621,25 @@ const sendTopPartners = async (ctx: any, offset: number) => {
       const youLabel = p && p.id === partner.id ? ' (это вы)' : ''
       rows.push(`${index + 1}. ${escapeHtml(display)}${youLabel} — ${formatMoneyUi(item.earnings)} ₽`)
     })
+
+    if (viewerRank && viewerRank > 10) {
+      const viewerItem = topList[viewerIndex]
+      const p = viewerItem.partner
+      const isAdminPartner = p && isAdmin(Number(p.telegramId))
+      let display = ''
+      if (adminViewer) {
+        display = isAdminPartner ? 'Админ' : p.username || p.telegramId
+      } else {
+        if (isAdminPartner) {
+          display = 'Админ'
+        } else {
+          const base = p.username || p.telegramId
+          display = maskLabel(String(base))
+        }
+      }
+      rows.push('...')
+      rows.push(`${viewerRank}. ${escapeHtml(display)} (это вы) — ${formatMoneyUi(viewerItem.earnings)} ₽`)
+    }
   }
 
   const keyboard = buildTopPartnersKeyboard(offset, hasPrev, hasNext)
