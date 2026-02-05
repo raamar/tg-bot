@@ -94,6 +94,13 @@ const formatDateRangeMsk = (startMskMs: number, endMskMsExclusive: number): stri
   return `${startLabel} - ${endLabel}`
 }
 
+const formatMonthYearMsk = (startMskMs: number): string => {
+  const date = new Date(startMskMs)
+  const raw = date.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric', timeZone: 'UTC' })
+  if (!raw) return ''
+  return raw.charAt(0).toUpperCase() + raw.slice(1)
+}
+
 const addMonths = (year: number, month: number, offset: number): { year: number; month: number } => {
   const total = year * 12 + month + offset
   const nextYear = Math.floor(total / 12)
@@ -441,6 +448,32 @@ const getPartnerPeriodStats = async (
   return { uniqueUsers, earnings }
 }
 
+const getReferralPeriodStats = async (
+  referralCode: string,
+  startUtc: Date,
+  endUtc: Date,
+): Promise<{ uniqueUsers: number; earnings: Prisma.Decimal }> => {
+  const uniqueUsers = await prisma.user.count({
+    where: {
+      refSource: referralCode,
+      createdAt: { gte: startUtc, lt: endUtc },
+    },
+  })
+
+  const { paidByRef } = await getPaidByRefForPeriod([referralCode], startUtc, endUtc)
+  const totalPaid = paidByRef.get(referralCode) ?? new Prisma.Decimal(0)
+
+  const referral = await prisma.partnerReferral.findUnique({
+    where: { code: referralCode },
+    select: { earningRate: true },
+  })
+
+  const rate = referral?.earningRate ?? BASE_EARNING_RATE
+  const earnings = totalPaid.mul(rate)
+
+  return { uniqueUsers, earnings }
+}
+
 const getAdminPartnerRevenueForPeriod = async (
   excludePartnerId: string | null,
   startUtc: Date,
@@ -528,7 +561,7 @@ const buildTopPartnersKeyboard = (offset: number, hasPrev: boolean, hasNext: boo
   } else {
     navRow.push(spacer)
   }
-  navRow.push(spacer)
+  navRow.push(Markup.button.callback('Обновить', `TOP_REFRESH:${offset}`))
   if (hasNext) {
     navRow.push(Markup.button.callback('➡️', `TOP_NAV:${offset + 1}`))
   } else {
@@ -554,13 +587,14 @@ const sendTopPartners = async (ctx: any, offset: number) => {
   const hasPrev = await getHasPrevPeriod(refCodes, 'MONTH', startMskMs)
   const hasNext = offset < 0
 
+  const monthLabel = formatMonthYearMsk(startMskMs)
   const rows: string[] = [
     '🏆 <b>ТОП партнёров</b>',
-    `Период: ${label}`,
+    `Период: ${monthLabel}`,
     '',
-    'Топ-10 партнёров, по чистому заработку (после вычета всееех комиссий) - прямо сейчас!',
+    '<i>Топ-10 партнёров, по чистому заработку (после вычета всееех комиссий) - прямо сейчас!</i>',
     '',
-    'Твоя цель - быть здесь! 👑',
+    '<b>Твоя цель - быть здесь! 👑</b>',
     '',
   ]
 
@@ -748,7 +782,6 @@ const sendMainMenu = async (ctx: any, opts?: { clearNotices?: boolean }) => {
 const buildAnalyticsKeyboard = (
   type: AnalyticsType,
   offset: number,
-  focusStartMskMs: number,
   hasPrev: boolean,
   hasNext: boolean,
 ) => {
@@ -762,10 +795,7 @@ const buildAnalyticsKeyboard = (
   const typeButton = (key: AnalyticsType) => {
     const isActive = key === type
     const text = isActive ? `${activePrefix}${typeLabel(key)}` : typeLabel(key)
-    return Markup.button.callback(
-      text,
-      isActive ? 'ANALYTICS_NOOP' : `ANALYTICS_TYPE:${key}:${focusStartMskMs}`,
-    )
+    return Markup.button.callback(text, isActive ? 'ANALYTICS_NOOP' : `ANALYTICS_TYPE:${key}`)
   }
 
   const rows: any[] = []
@@ -778,7 +808,7 @@ const buildAnalyticsKeyboard = (
   } else {
     navRow.push(spacer)
   }
-  navRow.push(spacer)
+  navRow.push(Markup.button.callback('Обновить', `ANALYTICS_REFRESH:${type}:${offset}`))
   if (hasNext) {
     navRow.push(Markup.button.callback('➡️', `ANALYTICS_NAV:${type}:${offset + 1}`))
   } else {
@@ -821,7 +851,72 @@ const sendAnalytics = async (ctx: any, type: AnalyticsType, offset: number) => {
     : partnerStats.earnings
   rows.push(`🏆 Заработано всего за период: ${formatMoneyUi(totalAll)} ₽`)
 
-  const keyboard = buildAnalyticsKeyboard(type, offset, startMskMs, hasPrev, hasNext)
+  const keyboard = buildAnalyticsKeyboard(type, offset, hasPrev, hasNext)
+  await clearListForUser(ctx)
+  await sendControlMessage(ctx, rows.join('\n'), keyboard)
+}
+
+const buildRefAnalyticsKeyboard = (
+  refCode: string,
+  type: AnalyticsType,
+  offset: number,
+  hasPrev: boolean,
+  hasNext: boolean,
+) => {
+  const activePrefix = '🔹 '
+  const typeLabel = (key: AnalyticsType) => {
+    if (key === 'MONTH') return 'Месяц'
+    if (key === 'WEEK') return 'Неделя'
+    return 'День'
+  }
+
+  const typeButton = (key: AnalyticsType) => {
+    const isActive = key === type
+    const text = isActive ? `${activePrefix}${typeLabel(key)}` : typeLabel(key)
+    return Markup.button.callback(text, isActive ? 'ANALYTICS_NOOP' : `RA_TYPE:${refCode}:${key}`)
+  }
+
+  const rows: any[] = []
+  rows.push([typeButton('MONTH'), typeButton('WEEK'), typeButton('DAY')])
+
+  const navRow: any[] = []
+  const spacer = Markup.button.callback('⠀', 'ANALYTICS_NOOP')
+  if (hasPrev) {
+    navRow.push(Markup.button.callback('⬅️', `RA_NAV:${refCode}:${type}:${offset - 1}`))
+  } else {
+    navRow.push(spacer)
+  }
+  navRow.push(Markup.button.callback('Обновить', `RA_REFRESH:${refCode}:${type}:${offset}`))
+  if (hasNext) {
+    navRow.push(Markup.button.callback('➡️', `RA_NAV:${refCode}:${type}:${offset + 1}`))
+  } else {
+    navRow.push(spacer)
+  }
+
+  rows.push(navRow)
+  rows.push([Markup.button.callback('⬅️ Назад', 'REF_LIST')])
+
+  return Markup.inlineKeyboard(rows)
+}
+
+const sendRefAnalytics = async (ctx: any, ref: { code: string; name?: string | null }, type: AnalyticsType, offset: number) => {
+  const { startUtc, endUtc, startMskMs, label } = getPeriodRange(type, offset)
+
+  const stats = await getReferralPeriodStats(ref.code, startUtc, endUtc)
+  const hasPrev = await getHasPrevPeriod([ref.code], type, startMskMs)
+  const hasNext = offset < 0
+
+  const title = ref.name ? `${ref.name} (${ref.code})` : ref.code
+  const rows = [
+    '📊 <b>Аналитика по реф. ссылке</b>',
+    `Реф. ссылка: ${escapeHtml(title)}`,
+    `Период: ${label}`,
+    '',
+    `✨ Уникальные пользователи: ${formatCountUi(stats.uniqueUsers)}`,
+    `💸 Заработано всего за период: ${formatMoneyUi(stats.earnings)} ₽`,
+  ]
+
+  const keyboard = buildRefAnalyticsKeyboard(ref.code, type, offset, hasPrev, hasNext)
   await clearListForUser(ctx)
   await sendControlMessage(ctx, rows.join('\n'), keyboard)
 }
@@ -959,6 +1054,20 @@ bot.action(
 )
 
 bot.action(
+  /^TOP_REFRESH:(-?\d+)$/,
+  withErrorHandling(async (ctx) => {
+    await ctx.answerCbQuery().catch(() => {})
+    await clearSession(String(ctx.from.id))
+    const offset = Number(ctx.match[1])
+    if (!Number.isFinite(offset)) {
+      await sendTopPartners(ctx, 0)
+      return
+    }
+    await sendTopPartners(ctx, offset)
+  }),
+)
+
+bot.action(
   'TOP_NOOP',
   withErrorHandling(async (ctx) => {
     await ctx.answerCbQuery().catch(() => {})
@@ -1001,17 +1110,26 @@ const getOffsetFromFocus = (type: AnalyticsType, focusStartMskMs: number): numbe
 }
 
 bot.action(
-  /^ANALYTICS_TYPE:(DAY|WEEK|MONTH):(\d{12,13})$/,
+  /^ANALYTICS_TYPE:(DAY|WEEK|MONTH)$/,
   withErrorHandling(async (ctx) => {
     await ctx.answerCbQuery().catch(() => {})
     await clearSession(String(ctx.from.id))
     const type = ctx.match[1] as AnalyticsType
-    const focusStartMskMs = Number(ctx.match[2])
-    if (!Number.isFinite(focusStartMskMs)) {
+    await sendAnalytics(ctx, type, 0)
+  }),
+)
+
+bot.action(
+  /^ANALYTICS_REFRESH:(DAY|WEEK|MONTH):(-?\d+)$/,
+  withErrorHandling(async (ctx) => {
+    await ctx.answerCbQuery().catch(() => {})
+    await clearSession(String(ctx.from.id))
+    const type = ctx.match[1] as AnalyticsType
+    const offset = Number(ctx.match[2])
+    if (!Number.isFinite(offset)) {
       await sendAnalytics(ctx, ANALYTICS_DEFAULT_TYPE, 0)
       return
     }
-    const offset = getOffsetFromFocus(type, focusStartMskMs)
     await sendAnalytics(ctx, type, offset)
   }),
 )
@@ -1160,7 +1278,97 @@ bot.action(
       `💸 Заработано всего: ${formatMoneyUi(item.earnings)} ₽`,
     ].join('\n')
 
-    await sendControlMessage(ctx, text, Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'REF_LIST')]]))
+    await sendControlMessage(
+      ctx,
+      text,
+      Markup.inlineKeyboard([
+        [Markup.button.callback('📊 Аналитика', `RA:${referral.code}:${ANALYTICS_DEFAULT_TYPE}:0`)],
+        [Markup.button.callback('⬅️ Назад', 'REF_LIST')],
+      ]),
+    )
+  }),
+)
+
+bot.action(
+  /^RA:([^:]+):(DAY|WEEK|MONTH):(-?\d+)$/,
+  withErrorHandling(async (ctx) => {
+    await ctx.answerCbQuery().catch(() => {})
+    await clearSession(String(ctx.from.id))
+    const refCode = ctx.match[1]
+    const type = ctx.match[2] as AnalyticsType
+    const offset = Number(ctx.match[3])
+    if (!Number.isFinite(offset)) {
+      await sendRefList(ctx)
+      return
+    }
+    const referral = await prisma.partnerReferral.findUnique({ where: { code: refCode } })
+    if (!referral) {
+      await sendNotice(ctx, 'Реф. ссылка не найдена')
+      await sendRefList(ctx)
+      return
+    }
+    await sendRefAnalytics(ctx, referral, type, offset)
+  }),
+)
+
+bot.action(
+  /^RA_NAV:([^:]+):(DAY|WEEK|MONTH):(-?\d+)$/,
+  withErrorHandling(async (ctx) => {
+    await ctx.answerCbQuery().catch(() => {})
+    await clearSession(String(ctx.from.id))
+    const refCode = ctx.match[1]
+    const type = ctx.match[2] as AnalyticsType
+    const offset = Number(ctx.match[3])
+    if (!Number.isFinite(offset)) {
+      await sendRefList(ctx)
+      return
+    }
+    const referral = await prisma.partnerReferral.findUnique({ where: { code: refCode } })
+    if (!referral) {
+      await sendNotice(ctx, 'Реф. ссылка не найдена')
+      await sendRefList(ctx)
+      return
+    }
+    await sendRefAnalytics(ctx, referral, type, offset)
+  }),
+)
+
+bot.action(
+  /^RA_TYPE:([^:]+):(DAY|WEEK|MONTH)$/,
+  withErrorHandling(async (ctx) => {
+    await ctx.answerCbQuery().catch(() => {})
+    await clearSession(String(ctx.from.id))
+    const refCode = ctx.match[1]
+    const type = ctx.match[2] as AnalyticsType
+    const referral = await prisma.partnerReferral.findUnique({ where: { code: refCode } })
+    if (!referral) {
+      await sendNotice(ctx, 'Реф. ссылка не найдена')
+      await sendRefList(ctx)
+      return
+    }
+    await sendRefAnalytics(ctx, referral, type, 0)
+  }),
+)
+
+bot.action(
+  /^RA_REFRESH:([^:]+):(DAY|WEEK|MONTH):(-?\d+)$/,
+  withErrorHandling(async (ctx) => {
+    await ctx.answerCbQuery().catch(() => {})
+    await clearSession(String(ctx.from.id))
+    const refCode = ctx.match[1]
+    const type = ctx.match[2] as AnalyticsType
+    const offset = Number(ctx.match[3])
+    if (!Number.isFinite(offset)) {
+      await sendRefList(ctx)
+      return
+    }
+    const referral = await prisma.partnerReferral.findUnique({ where: { code: refCode } })
+    if (!referral) {
+      await sendNotice(ctx, 'Реф. ссылка не найдена')
+      await sendRefList(ctx)
+      return
+    }
+    await sendRefAnalytics(ctx, referral, type, offset)
   }),
 )
 
