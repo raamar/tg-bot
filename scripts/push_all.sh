@@ -3,6 +3,7 @@ set -euo pipefail
 
 PUSH_PORT="${1:-5000}"
 REGISTRY_HOST="127.0.0.1:${PUSH_PORT}"
+# REGISTRY_HOST="host.docker.internal:${PUSH_PORT}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
