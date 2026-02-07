@@ -622,7 +622,9 @@
 								{#if item.type === 'photo'}
 									<img src={item.previewUrl} alt={item.name} class="h-32 w-full rounded-md object-cover" />
 								{:else}
-									<video src={item.previewUrl} class="h-32 w-full rounded-md object-cover" controls></video>
+									<video src={item.previewUrl} class="h-32 w-full rounded-md object-cover" controls>
+										<track kind="captions" />
+									</video>
 								{/if}
 								<p class="body-s mt-2 text-text-muted">{item.name}</p>
 							</div>
