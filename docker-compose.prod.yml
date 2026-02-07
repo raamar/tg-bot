@@ -172,8 +172,9 @@ services:
       - 'traefik.http.routers.neuro.entrypoints=websecure'
       - 'traefik.http.routers.neuro.tls.certresolver=le'
       - 'traefik.http.services.neuro.loadbalancer.server.port=3000'
-      - 'traefik.http.routers.neuro.middlewares=neuro-compress'
+      - 'traefik.http.routers.neuro.middlewares=neuro-compress,distribution-auth'
       - 'traefik.http.middlewares.neuro-compress.compress=true'
+      - 'traefik.http.middlewares.distribution-auth.basicauth.users=${DISTRIBUTION_PASSWORD}'
       - 'traefik.http.routers.neuro.priority=100'
     networks:
       - traefik_net
