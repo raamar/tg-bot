@@ -1,0 +1,368 @@
+import { Queue, Worker } from 'bullmq'
+import { redis, redisPub } from './redis'
+import { sendMediaByFileId, sendMediaGroupByFileIds, sendMessage } from './telegram'
+
+const BROADCAST_QUEUE = 'distribution_broadcast'
+
+const DEFAULT_CONCURRENCY = 1
+const TTL_SECONDS = 60 * 60 * 10
+const MIN_DELAY_MS = 50
+const BATCH_SIZE = 500
+const LOG_LIMIT = 2000
+const ERROR_LIMIT = 5000
+
+let lastRequestAt = 0
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+const waitForRateLimit = async (minInterval: number) => {
+	const now = Date.now()
+	const delta = now - lastRequestAt
+	if (delta < minInterval) {
+		await sleep(minInterval - delta)
+	}
+	lastRequestAt = Date.now()
+}
+
+export interface BroadcastJobData {
+	broadcastId: string
+	batchStart: number
+	batchSize: number
+	messageHtml: string
+	media: { type: 'photo' | 'video'; fileId: string }[]
+	captionMode: 'caption' | 'separate' | 'none'
+	delayMs: number
+}
+
+const globalForQueues = globalThis as typeof globalThis & {
+	__distributionBroadcastQueue?: Queue<BroadcastJobData>
+	__distributionBroadcastWorker?: Worker<BroadcastJobData>
+}
+
+export const broadcastQueue =
+	globalForQueues.__distributionBroadcastQueue ??
+	new Queue<BroadcastJobData>(BROADCAST_QUEUE, { connection: redis })
+
+if (!globalForQueues.__distributionBroadcastQueue) {
+	globalForQueues.__distributionBroadcastQueue = broadcastQueue
+}
+
+const keyStatus = (id: string) => `broadcast:status:${id}`
+const keyStop = (id: string) => `broadcast:stop:${id}`
+const keyLogs = (id: string) => `broadcast:logs:${id}`
+const keyErrors = (id: string) => `broadcast:errors:${id}`
+const keyContacts = (id: string) => `broadcast:contacts:${id}`
+const keyMeta = (id: string) => `broadcast:meta:${id}`
+export const channelEvents = (id: string) => `broadcast:events:${id}`
+
+export type BroadcastState = 'queued' | 'running' | 'stopping' | 'stopped' | 'completed'
+
+export interface BroadcastStatus {
+	id: string
+	state: BroadcastState
+	total: number
+	success: number
+	failed: number
+	skipped: number
+	createdAt: number
+	startedAt?: number
+	finishedAt?: number
+	messagePreview?: string
+	cursor?: number
+}
+
+export const pushLog = async (
+	broadcastId: string,
+	level: 'info' | 'warn' | 'error',
+	message: string,
+) => {
+	const payload = {
+		ts: Date.now(),
+		level,
+		message,
+	}
+	await redis.rpush(keyLogs(broadcastId), JSON.stringify(payload))
+	await redis.ltrim(keyLogs(broadcastId), -LOG_LIMIT, -1)
+	await redis.expire(keyLogs(broadcastId), TTL_SECONDS)
+	await redisPub.publish(channelEvents(broadcastId), JSON.stringify({ type: 'log', payload }))
+}
+
+export const pushError = async (
+	broadcastId: string,
+	contactId: string,
+	reason: string,
+	error?: string,
+) => {
+	const payload = {
+		ts: Date.now(),
+		contactId,
+		reason,
+		error: error ?? null,
+	}
+	await redis.rpush(keyErrors(broadcastId), JSON.stringify(payload))
+	await redis.ltrim(keyErrors(broadcastId), -ERROR_LIMIT, -1)
+	await redis.expire(keyErrors(broadcastId), TTL_SECONDS)
+	await redisPub.publish(channelEvents(broadcastId), JSON.stringify({ type: 'issue', payload }))
+}
+
+const publishStatus = async (broadcastId: string) => {
+	const status = await redis.hgetall(keyStatus(broadcastId))
+	await redisPub.publish(channelEvents(broadcastId), JSON.stringify({ type: 'status', payload: status }))
+}
+
+const updateState = async (broadcastId: string, state: BroadcastState) => {
+	await redis.hset(keyStatus(broadcastId), 'state', state)
+	await publishStatus(broadcastId)
+}
+
+const checkDone = async (broadcastId: string) => {
+	const statusKey = keyStatus(broadcastId)
+	const status = await redis.hgetall(statusKey)
+	if (!status || !status.total) return
+
+	const total = Number(status.total)
+	const success = Number(status.success)
+	const failed = Number(status.failed)
+	const skipped = Number(status.skipped)
+
+	if (success + failed + skipped >= total) {
+		const stopFlag = await redis.get(keyStop(broadcastId))
+		await redis.hset(statusKey, 'finishedAt', Date.now())
+		await updateState(broadcastId, stopFlag ? 'stopped' : 'completed')
+	}
+}
+
+const getContacts = async (broadcastId: string) => {
+	const raw = await redis.get(keyContacts(broadcastId))
+	return raw ? (JSON.parse(raw) as string[]) : []
+}
+
+const setContacts = async (broadcastId: string, contacts: string[]) => {
+	await redis.set(keyContacts(broadcastId), JSON.stringify(contacts), 'EX', TTL_SECONDS)
+}
+
+const setMeta = async (broadcastId: string, meta: Omit<BroadcastJobData, 'batchStart' | 'batchSize'>) => {
+	await redis.set(keyMeta(broadcastId), JSON.stringify(meta), 'EX', TTL_SECONDS)
+}
+
+const getMeta = async (broadcastId: string) => {
+	const raw = await redis.get(keyMeta(broadcastId))
+	return raw ? (JSON.parse(raw) as Omit<BroadcastJobData, 'batchStart' | 'batchSize'>) : null
+}
+
+const enqueueBatches = async (params: {
+	broadcastId: string
+	startIndex: number
+	total: number
+	messageHtml: string
+	media: { type: 'photo' | 'video'; fileId: string }[]
+	captionMode: 'caption' | 'separate' | 'none'
+	delayMs: number
+}) => {
+	const { broadcastId, startIndex, total, messageHtml, media, captionMode, delayMs } = params
+	for (let index = startIndex; index < total; index += BATCH_SIZE) {
+		await broadcastQueue.add(
+			'batch',
+			{
+				broadcastId,
+				batchStart: index,
+				batchSize: BATCH_SIZE,
+				messageHtml,
+				media,
+				captionMode,
+				delayMs,
+			},
+			{
+				jobId: `${broadcastId}:${index}`,
+				removeOnComplete: true,
+				removeOnFail: false,
+			},
+		)
+	}
+}
+
+if (!globalForQueues.__distributionBroadcastWorker) {
+	globalForQueues.__distributionBroadcastWorker = new Worker<BroadcastJobData>(
+		BROADCAST_QUEUE,
+		async (job) => {
+			const { broadcastId, batchStart, batchSize, messageHtml, media, captionMode, delayMs } = job.data
+
+			await updateState(broadcastId, 'running')
+			const startedAt = await redis.hget(keyStatus(broadcastId), 'startedAt')
+			if (!startedAt) {
+				await redis.hset(keyStatus(broadcastId), 'startedAt', Date.now())
+				await pushLog(broadcastId, 'info', 'Рассылка запущена.')
+			}
+
+			const contacts = await getContacts(broadcastId)
+			const batch = contacts.slice(batchStart, batchStart + batchSize)
+			if (batch.length === 0) return
+
+			for (let index = 0; index < batch.length; index += 1) {
+				const stopFlag = await redis.get(keyStop(broadcastId))
+				if (stopFlag) {
+					await pushLog(broadcastId, 'warn', 'Рассылка приостановлена.')
+					return
+				}
+
+				const contactId = batch[index]
+				try {
+					const interval = Math.max(delayMs, MIN_DELAY_MS)
+					if (media.length === 0) {
+						if (messageHtml) {
+							await waitForRateLimit(interval)
+							await sendMessage(contactId, messageHtml)
+						}
+					} else if (media.length === 1) {
+						const caption = captionMode === 'caption' ? messageHtml : undefined
+						await waitForRateLimit(interval)
+						await sendMediaByFileId(contactId, media[0], caption)
+						if (captionMode === 'separate' && messageHtml) {
+							await waitForRateLimit(interval)
+							await sendMessage(contactId, messageHtml)
+						}
+					} else {
+						const caption = captionMode === 'caption' ? messageHtml : undefined
+						await waitForRateLimit(interval)
+						await sendMediaGroupByFileIds(contactId, media, caption)
+						if (captionMode === 'separate' && messageHtml) {
+							await waitForRateLimit(interval)
+							await sendMessage(contactId, messageHtml)
+						}
+					}
+
+					await redis.hincrby(keyStatus(broadcastId), 'success', 1)
+					await pushLog(broadcastId, 'info', `Отправлено ${contactId}.`)
+				} catch (error) {
+					const message = error instanceof Error ? error.message : String(error)
+					await redis.hincrby(keyStatus(broadcastId), 'failed', 1)
+					await pushError(broadcastId, contactId, 'send_failed', message)
+					await pushLog(broadcastId, 'error', `Ошибка ${contactId}: ${message}`)
+				}
+
+				await redis.hincrby(keyStatus(broadcastId), 'cursor', 1)
+			}
+
+			await publishStatus(broadcastId)
+			await checkDone(broadcastId)
+		},
+		{ connection: redis, concurrency: DEFAULT_CONCURRENCY },
+	)
+}
+
+export const initBroadcastStatus = async (status: BroadcastStatus) => {
+	await redis.hset(keyStatus(status.id), {
+		state: status.state,
+		total: status.total,
+		success: status.success,
+		failed: status.failed,
+		skipped: status.skipped,
+		createdAt: status.createdAt,
+		startedAt: status.startedAt ?? '',
+		finishedAt: status.finishedAt ?? '',
+		messagePreview: status.messagePreview ?? '',
+		cursor: status.cursor ?? 0,
+	})
+	await redis.expire(keyStatus(status.id), TTL_SECONDS)
+	await redis.expire(keyLogs(status.id), TTL_SECONDS)
+	await redis.expire(keyErrors(status.id), TTL_SECONDS)
+	await redis.expire(keyStop(status.id), TTL_SECONDS)
+	await publishStatus(status.id)
+}
+
+export const getBroadcastStatus = async (broadcastId: string) => {
+	const status = await redis.hgetall(keyStatus(broadcastId))
+	if (!status || Object.keys(status).length === 0) {
+		return null
+	}
+
+	return status
+}
+
+export const getBroadcastErrors = async (broadcastId: string) => {
+	const errors = await redis.lrange(keyErrors(broadcastId), 0, -1)
+	return errors.map((item) => {
+		try {
+			return JSON.parse(item)
+		} catch {
+			return { raw: item }
+		}
+	})
+}
+
+export const getBroadcastLogs = async (broadcastId: string, limit = 200) => {
+	const logs = await redis.lrange(keyLogs(broadcastId), -limit, -1)
+	return logs.map((item) => {
+		try {
+			return JSON.parse(item)
+		} catch {
+			return { raw: item }
+		}
+	})
+}
+
+export const requestStop = async (broadcastId: string) => {
+	await redis.set(keyStop(broadcastId), '1')
+	await updateState(broadcastId, 'stopping')
+
+	const waitingJobs = await broadcastQueue.getJobs(['waiting', 'delayed'])
+	const toRemove = waitingJobs.filter((job) => job.data.broadcastId === broadcastId)
+	if (toRemove.length > 0) {
+		await Promise.all(toRemove.map((job) => job.remove()))
+		await pushLog(broadcastId, 'warn', `Удалено задач: ${toRemove.length}.`)
+		await publishStatus(broadcastId)
+	}
+	await updateState(broadcastId, 'stopped')
+}
+
+export const queueBroadcast = async (data: {
+	broadcastId: string
+	contacts: string[]
+	messageHtml: string
+	media: { type: 'photo' | 'video'; fileId: string }[]
+	captionMode: 'caption' | 'separate' | 'none'
+	delayMs: number
+}) => {
+	await setContacts(data.broadcastId, data.contacts)
+	await setMeta(data.broadcastId, {
+		broadcastId: data.broadcastId,
+		messageHtml: data.messageHtml,
+		media: data.media,
+		captionMode: data.captionMode,
+		delayMs: data.delayMs,
+	})
+	await enqueueBatches({
+		broadcastId: data.broadcastId,
+		startIndex: 0,
+		total: data.contacts.length,
+		messageHtml: data.messageHtml,
+		media: data.media,
+		captionMode: data.captionMode,
+		delayMs: data.delayMs,
+	})
+}
+
+export const resumeBroadcast = async (broadcastId: string) => {
+	const status = await getBroadcastStatus(broadcastId)
+	if (!status) {
+		throw new Error('NOT_FOUND')
+	}
+	const meta = await getMeta(broadcastId)
+	if (!meta) {
+		throw new Error('NO_META')
+	}
+	const cursor = Number(status.cursor ?? 0)
+	const total = Number(status.total ?? 0)
+	await redis.del(keyStop(broadcastId))
+	await updateState(broadcastId, 'queued')
+	await enqueueBatches({
+		broadcastId,
+		startIndex: cursor,
+		total,
+		messageHtml: meta.messageHtml,
+		media: meta.media,
+		captionMode: meta.captionMode,
+		delayMs: meta.delayMs,
+	})
+	await pushLog(broadcastId, 'info', 'Рассылка продолжена.')
+}

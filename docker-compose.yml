@@ -127,6 +127,11 @@ services:
       - ./:/repo
       - distribution_node_modules:/repo/node_modules
       - /repo/distribution/node_modules
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
     working_dir: /repo/distribution
     environment:
       NODE_ENV: development
@@ -134,6 +139,10 @@ services:
       WATCHPACK_POLLING: 'true'
       VITE_HMR_PORT: '24678'
       PUBLIC_DOMAIN: ${DISTRIBUTION_DOMAIN}
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      TELEGRAM_TOKEN: ${TELEGRAM_TOKEN}
+      ADMIN_IDS: ${ADMIN_IDS}
     tty: true
 volumes:
   postgres-data:

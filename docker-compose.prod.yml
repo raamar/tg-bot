@@ -161,6 +161,10 @@ services:
       PORT: 3000
       PUBLIC_DOMAIN: ${DISTRIBUTION_DOMAIN}
       ORIGIN: https://${DISTRIBUTION_DOMAIN}
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      TELEGRAM_TOKEN: ${TELEGRAM_TOKEN}
+      ADMIN_IDS: ${ADMIN_IDS}
     labels:
       - 'traefik.enable=true'
       - 'traefik.docker.network=traefik_net'
@@ -173,6 +177,11 @@ services:
       - 'traefik.http.routers.neuro.priority=100'
     networks:
       - traefik_net
+    depends_on:
+      redis:
+        condition: service_started
+      db:
+        condition: service_started
 
 volumes:
   postgres-data:

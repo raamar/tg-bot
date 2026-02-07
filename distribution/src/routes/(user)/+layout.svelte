@@ -28,7 +28,7 @@
 </svelte:head>
 
 <div class="relative py-10 md:py-12">
-	<main class="app-container min-h-screen space-y-10" id="main">
+	<main class="app-container min-h-screen space-y-6" id="main">
 		{@render children?.()}
 	</main>
 </div>
