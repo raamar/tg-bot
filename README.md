@@ -70,5 +70,5 @@ PASS=$(openssl rand -base64 12)
 HASH=$(openssl passwd -apr1 "$PASS")
 echo "Login: admin"
 echo "Password: $PASS"
-echo "DISTRIBUTION_PASSWORD=admin:$HASH"
+echo "DISTRIBUTION_PASSWORD=admin:${HASH//$/\\$}"
 ```
