@@ -1,0 +1,23 @@
+FROM node:20-slim
+
+WORKDIR /repo
+RUN apt-get update && apt-get install -y curl openssl && rm -rf /var/lib/apt/lists/*
+RUN npm install -g pnpm
+
+ENV CHOKIDAR_USEPOLLING=true
+ENV WATCHPACK_POLLING=true
+ENV VITE_HMR_PORT=24678
+
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY distribution/package.json distribution/package.json
+COPY packages/db/package.json packages/db/package.json
+COPY packages/db ./packages/db
+
+RUN pnpm install --no-frozen-lockfile --filter @app/db... --filter ./distribution...
+RUN pnpm --filter @app/db db:generate
+
+WORKDIR /repo/distribution
+
+EXPOSE 5173 24678
+
+CMD ["sh", "-lc", "pnpm --filter @app/db db:generate && pnpm dev --host 0.0.0.0 --port 5173"]

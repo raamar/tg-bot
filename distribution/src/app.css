@@ -1,0 +1,159 @@
+@import '@fontsource-variable/manrope';
+@import '@fontsource-variable/inter';
+
+@import 'tailwindcss';
+@plugin "@tailwindcss/forms";
+
+@theme {
+	--container-max: 1200px;
+
+	--radius-sm: 8px;
+	--radius-md: 12px;
+	--radius-lg: 20px;
+	--radius-xl: 28px;
+
+	--font-sans: 'Manrope Variable', system-ui, 'Segoe UI', Arial, sans-serif;
+	--font-sans-alt: 'Inter Variable', system-ui, 'Segoe UI', Arial, sans-serif;
+
+	--text-h1: clamp(2.4rem, 1.6rem + 2.8vw, 4rem);
+	--text-h1--line-height: 1.05;
+
+	--text-h2: clamp(1.9rem, 1.3rem + 1.8vw, 3rem);
+	--text-h2--line-height: 1.15;
+
+	--text-h3: clamp(1.4rem, 1.05rem + 1.2vw, 2rem);
+	--text-h3--line-height: 1.25;
+
+	--text-body-l: clamp(1.125rem, 1.05rem + 0.4vw, 1.25rem);
+	--text-body-l--line-height: 1.5;
+
+	--text-body-m: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
+	--text-body-m--line-height: 1.6;
+
+	--text-body-s: clamp(0.9375rem, 0.9rem + 0.15vw, 1rem);
+	--text-body-s--line-height: 1.6;
+
+	--color-bg: #0f1216;
+	--color-surface: #171b22;
+	--color-surface-2: #1e2531;
+	--color-text: #f6f7f9;
+	--color-text-muted: #aab0bc;
+	--color-border: #2a3342;
+	--color-accent: #f3c440;
+	--color-accent-strong: #fbc737;
+	--color-success: #46c27a;
+	--color-warning: #ff5a5f;
+
+	--spacing-1: 4px;
+	--spacing-2: 8px;
+	--spacing-3: 12px;
+	--spacing-4: 16px;
+	--spacing-5: 24px;
+	--spacing-6: 32px;
+	--spacing-7: 40px;
+	--spacing-8: 48px;
+	--spacing-9: 64px;
+	--spacing-10: 80px;
+	--spacing-11: 96px;
+	--spacing-12: 120px;
+}
+
+@layer base {
+	html,
+	body {
+		@apply bg-bg font-sans-alt text-text antialiased;
+		min-height: 100%;
+	}
+
+	h1,
+	h2,
+	h3,
+	h4,
+	h5,
+	h6 {
+		@apply font-sans;
+	}
+}
+
+@layer components {
+	.h1 {
+		@apply font-sans text-h1 font-normal text-text;
+	}
+
+	.h2 {
+		@apply font-sans text-h2 font-normal text-text;
+	}
+
+	.h3 {
+		@apply font-sans text-h3 font-normal text-text;
+	}
+
+	.body-l {
+		@apply font-sans-alt text-body-l font-normal text-text;
+	}
+
+	.body-m {
+		@apply font-sans-alt text-body-m font-normal text-text;
+	}
+
+	.body-s {
+		@apply font-sans-alt text-body-s font-normal text-text-muted;
+	}
+
+	.app-container {
+		@apply mx-auto w-full;
+		max-width: var(--container-max);
+		padding-left: var(--spacing-6);
+		padding-right: var(--spacing-6);
+	}
+
+	@media (max-width: 1023px) {
+		.app-container {
+			padding-left: var(--spacing-4);
+			padding-right: var(--spacing-4);
+		}
+	}
+
+	@media (max-width: 767px) {
+		.app-container {
+			padding-left: var(--spacing-3);
+			padding-right: var(--spacing-3);
+		}
+	}
+
+	.card {
+		@apply rounded-lg border border-border bg-surface p-6;
+	}
+
+	.card-muted {
+		@apply bg-surface-2;
+	}
+
+	.badge {
+		@apply inline-flex items-center rounded-full border border-border bg-surface-2 px-3 py-1 text-xs uppercase tracking-wide text-text-muted;
+	}
+
+	.btn {
+		@apply inline-flex items-center justify-center gap-2 rounded-md px-5 py-3 font-sans-alt text-body-m font-medium transition-colors duration-200;
+	}
+
+	.btn-primary {
+		@apply bg-accent text-bg hover:bg-accent-strong;
+	}
+
+	.btn-secondary {
+		@apply border border-border bg-surface text-text hover:bg-surface-2;
+	}
+
+	.btn-ghost {
+		@apply text-text-muted hover:text-text;
+	}
+
+	.input {
+		@apply w-full rounded-md border border-border bg-surface px-4 py-3 text-body-m text-text placeholder:text-text-muted/70 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20;
+	}
+
+	.input-help {
+		@apply text-body-s text-text-muted;
+	}
+}

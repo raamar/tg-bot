@@ -115,10 +115,30 @@ services:
     ports:
       - '9000:9000'
       - '9001:9001'
-
+  distribution:
+    build:
+      context: .
+      dockerfile: ./distribution/Dockerfile.dev
+    ports:
+      - '5173:5173'
+      - '24678:24678'
+      - '5555:5555'
+    volumes:
+      - ./:/repo
+      - distribution_node_modules:/repo/node_modules
+      - /repo/distribution/node_modules
+    working_dir: /repo/distribution
+    environment:
+      NODE_ENV: development
+      CHOKIDAR_USEPOLLING: 'true'
+      WATCHPACK_POLLING: 'true'
+      VITE_HMR_PORT: '24678'
+      PUBLIC_DOMAIN: ${DISTRIBUTION_DOMAIN}
+    tty: true
 volumes:
   postgres-data:
   redis-data:
   bot_node_modules:
   partner_bot_node_modules:
+  distribution_node_modules:
   minio_data:

@@ -147,6 +147,31 @@ services:
     networks:
       - default
       - traefik_net
+  distribution:
+    build:
+      context: .
+      args:
+        PUBLIC_DOMAIN: ${DISTRIBUTION_DOMAIN}
+      dockerfile: ./distribution/Dockerfile
+    restart: always
+    environment:
+      BODY_SIZE_LIMIT: 10M
+      NODE_ENV: production
+      PORT: 3000
+      PUBLIC_DOMAIN: ${DISTRIBUTION_DOMAIN}
+      ORIGIN: https://${DISTRIBUTION_DOMAIN}
+    labels:
+      - 'traefik.enable=true'
+      - 'traefik.docker.network=traefik_net'
+      - 'traefik.http.routers.neuro.rule=Host(`${DISTRIBUTION_DOMAIN}`)'
+      - 'traefik.http.routers.neuro.entrypoints=websecure'
+      - 'traefik.http.routers.neuro.tls.certresolver=le'
+      - 'traefik.http.services.neuro.loadbalancer.server.port=3000'
+      - 'traefik.http.routers.neuro.middlewares=neuro-compress'
+      - 'traefik.http.middlewares.neuro-compress.compress=true'
+      - 'traefik.http.routers.neuro.priority=100'
+    networks:
+      - traefik_net
 
 volumes:
   postgres-data:

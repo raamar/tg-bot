@@ -2,6 +2,7 @@ packages:
   - api
   - bot
   - partner_bot
+  - distribution
   - packages/*
 onlyBuiltDependencies:
   - '@prisma/client'
