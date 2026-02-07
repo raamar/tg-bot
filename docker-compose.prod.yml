@@ -148,6 +148,7 @@ services:
       - default
       - traefik_net
   distribution:
+    image: localhost:5000/bot-a-distribution:latest
     build:
       context: .
       args:

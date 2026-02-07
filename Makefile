@@ -8,6 +8,7 @@ up-build-linear:
 	docker compose -f $(COMPOSE_FILE) build db-migrate
 	docker compose -f $(COMPOSE_FILE) build bot
 	docker compose -f $(COMPOSE_FILE) build partner_bot
+	docker compose -f $(COMPOSE_FILE) build distribution
 	docker compose -f $(COMPOSE_FILE) up -d
 
 up-build-with-traefik-linear:
@@ -15,6 +16,7 @@ up-build-with-traefik-linear:
 	docker compose -f $(COMPOSE_FILE) --profile traefik build db-migrate
 	docker compose -f $(COMPOSE_FILE) --profile traefik build bot
 	docker compose -f $(COMPOSE_FILE) --profile traefik build partner_bot
+	docker compose -f $(COMPOSE_FILE) --profile traefik build distribution
 	docker compose -f $(COMPOSE_FILE) --profile traefik up -d
 
 deploy:

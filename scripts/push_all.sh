@@ -30,6 +30,8 @@ build_image "bot-a-bot" "${ROOT_DIR}/bot/Dockerfile" &
 PID_BOT=$!
 build_image "bot-a-partner-bot" "${ROOT_DIR}/partner_bot/Dockerfile" &
 PID_PBOT=$!
+build_image "bot-a-distribution" "${ROOT_DIR}/distribution/Dockerfile" &
+PID_DIST=$!
 
-wait "${PID_API}" "${PID_DBM}" "${PID_BOT}" "${PID_PBOT}"
+wait "${PID_API}" "${PID_DBM}" "${PID_BOT}" "${PID_PBOT}" "${PID_DIST}"
 log "All buildx pushes completed"
