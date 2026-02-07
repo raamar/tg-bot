@@ -37,6 +37,7 @@ COPY packages/db/package.json packages/db/package.json
 COPY packages/db ./packages/db
 
 RUN pnpm install --frozen-lockfile --prod --filter @app/db... --filter ./distribution...
+RUN pnpm --filter @app/db db:generate
 
 COPY --from=build /repo/distribution/build ./distribution/build
 COPY --from=build /repo/distribution/entrypoint.sh ./distribution/entrypoint.sh

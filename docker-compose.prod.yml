@@ -177,6 +177,7 @@ services:
       - 'traefik.http.middlewares.distribution-auth.basicauth.users=${DISTRIBUTION_PASSWORD}'
       - 'traefik.http.routers.neuro.priority=100'
     networks:
+      - default
       - traefik_net
     depends_on:
       redis:
