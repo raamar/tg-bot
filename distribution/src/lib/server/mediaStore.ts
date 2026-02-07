@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto'
 import { mkdir, writeFile, unlink } from 'node:fs/promises'
 import { join } from 'node:path'
-import { redis } from './redis'
+import { getRedis } from './redis'
 
 const MEDIA_ROOT = '/tmp/broadcast-media'
 const MEDIA_TTL = 60 * 60 * 6
@@ -28,6 +28,7 @@ const detectType = (mime: string): DraftMediaItem['type'] | null => {
 }
 
 export const storeDraftMedia = async (files: File[], draftId?: string) => {
+	const redis = getRedis()
 	if (!files.length) {
 		throw new Error('NO_FILES')
 	}
@@ -65,11 +66,13 @@ export const storeDraftMedia = async (files: File[], draftId?: string) => {
 }
 
 export const getDraftMedia = async (draftId: string) => {
+	const redis = getRedis()
 	const raw = await redis.get(draftKey(draftId))
 	return raw ? (JSON.parse(raw) as DraftMediaItem[]) : []
 }
 
 export const clearDraftMedia = async (draftId: string) => {
+	const redis = getRedis()
 	const items = await getDraftMedia(draftId)
 	await Promise.all(
 		items.map(async (item) => {

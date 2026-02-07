@@ -1,5 +1,5 @@
 import { Queue, Worker } from 'bullmq'
-import { redis, redisPub } from './redis'
+import { getRedis, getRedisPub } from './redis'
 import { sendMediaByFileId, sendMediaGroupByFileIds, sendMessage } from './telegram'
 
 const BROADCAST_QUEUE = 'distribution_broadcast'
@@ -39,12 +39,14 @@ const globalForQueues = globalThis as typeof globalThis & {
 	__distributionBroadcastWorker?: Worker<BroadcastJobData>
 }
 
-export const broadcastQueue =
-	globalForQueues.__distributionBroadcastQueue ??
-	new Queue<BroadcastJobData>(BROADCAST_QUEUE, { connection: redis })
-
-if (!globalForQueues.__distributionBroadcastQueue) {
-	globalForQueues.__distributionBroadcastQueue = broadcastQueue
+const getBroadcastQueue = () => {
+	if (!globalForQueues.__distributionBroadcastQueue) {
+		globalForQueues.__distributionBroadcastQueue = new Queue<BroadcastJobData>(
+			BROADCAST_QUEUE,
+			{ connection: getRedis() },
+		)
+	}
+	return globalForQueues.__distributionBroadcastQueue
 }
 
 const keyStatus = (id: string) => `broadcast:status:${id}`
@@ -81,10 +83,11 @@ export const pushLog = async (
 		level,
 		message,
 	}
+	const redis = getRedis()
 	await redis.rpush(keyLogs(broadcastId), JSON.stringify(payload))
 	await redis.ltrim(keyLogs(broadcastId), -LOG_LIMIT, -1)
 	await redis.expire(keyLogs(broadcastId), TTL_SECONDS)
-	await redisPub.publish(channelEvents(broadcastId), JSON.stringify({ type: 'log', payload }))
+	await getRedisPub().publish(channelEvents(broadcastId), JSON.stringify({ type: 'log', payload }))
 }
 
 export const pushError = async (
@@ -99,23 +102,27 @@ export const pushError = async (
 		reason,
 		error: error ?? null,
 	}
+	const redis = getRedis()
 	await redis.rpush(keyErrors(broadcastId), JSON.stringify(payload))
 	await redis.ltrim(keyErrors(broadcastId), -ERROR_LIMIT, -1)
 	await redis.expire(keyErrors(broadcastId), TTL_SECONDS)
-	await redisPub.publish(channelEvents(broadcastId), JSON.stringify({ type: 'issue', payload }))
+	await getRedisPub().publish(channelEvents(broadcastId), JSON.stringify({ type: 'issue', payload }))
 }
 
 const publishStatus = async (broadcastId: string) => {
+	const redis = getRedis()
 	const status = await redis.hgetall(keyStatus(broadcastId))
-	await redisPub.publish(channelEvents(broadcastId), JSON.stringify({ type: 'status', payload: status }))
+	await getRedisPub().publish(channelEvents(broadcastId), JSON.stringify({ type: 'status', payload: status }))
 }
 
 const updateState = async (broadcastId: string, state: BroadcastState) => {
+	const redis = getRedis()
 	await redis.hset(keyStatus(broadcastId), 'state', state)
 	await publishStatus(broadcastId)
 }
 
 const checkDone = async (broadcastId: string) => {
+	const redis = getRedis()
 	const statusKey = keyStatus(broadcastId)
 	const status = await redis.hgetall(statusKey)
 	if (!status || !status.total) return
@@ -133,19 +140,23 @@ const checkDone = async (broadcastId: string) => {
 }
 
 const getContacts = async (broadcastId: string) => {
+	const redis = getRedis()
 	const raw = await redis.get(keyContacts(broadcastId))
 	return raw ? (JSON.parse(raw) as string[]) : []
 }
 
 const setContacts = async (broadcastId: string, contacts: string[]) => {
+	const redis = getRedis()
 	await redis.set(keyContacts(broadcastId), JSON.stringify(contacts), 'EX', TTL_SECONDS)
 }
 
 const setMeta = async (broadcastId: string, meta: Omit<BroadcastJobData, 'batchStart' | 'batchSize'>) => {
+	const redis = getRedis()
 	await redis.set(keyMeta(broadcastId), JSON.stringify(meta), 'EX', TTL_SECONDS)
 }
 
 const getMeta = async (broadcastId: string) => {
+	const redis = getRedis()
 	const raw = await redis.get(keyMeta(broadcastId))
 	return raw ? (JSON.parse(raw) as Omit<BroadcastJobData, 'batchStart' | 'batchSize'>) : null
 }
@@ -161,7 +172,7 @@ const enqueueBatches = async (params: {
 }) => {
 	const { broadcastId, startIndex, total, messageHtml, media, captionMode, delayMs } = params
 	for (let index = startIndex; index < total; index += BATCH_SIZE) {
-		await broadcastQueue.add(
+		await getBroadcastQueue().add(
 			'batch',
 			{
 				broadcastId,
@@ -181,13 +192,15 @@ const enqueueBatches = async (params: {
 	}
 }
 
-if (!globalForQueues.__distributionBroadcastWorker) {
+const ensureWorker = () => {
+	if (globalForQueues.__distributionBroadcastWorker) return
 	globalForQueues.__distributionBroadcastWorker = new Worker<BroadcastJobData>(
 		BROADCAST_QUEUE,
 		async (job) => {
 			const { broadcastId, batchStart, batchSize, messageHtml, media, captionMode, delayMs } = job.data
 
 			await updateState(broadcastId, 'running')
+			const redis = getRedis()
 			const startedAt = await redis.hget(keyStatus(broadcastId), 'startedAt')
 			if (!startedAt) {
 				await redis.hset(keyStatus(broadcastId), 'startedAt', Date.now())
@@ -246,11 +259,12 @@ if (!globalForQueues.__distributionBroadcastWorker) {
 			await publishStatus(broadcastId)
 			await checkDone(broadcastId)
 		},
-		{ connection: redis, concurrency: DEFAULT_CONCURRENCY },
+		{ connection: getRedis(), concurrency: DEFAULT_CONCURRENCY },
 	)
 }
 
 export const initBroadcastStatus = async (status: BroadcastStatus) => {
+	const redis = getRedis()
 	await redis.hset(keyStatus(status.id), {
 		state: status.state,
 		total: status.total,
@@ -271,6 +285,7 @@ export const initBroadcastStatus = async (status: BroadcastStatus) => {
 }
 
 export const getBroadcastStatus = async (broadcastId: string) => {
+	const redis = getRedis()
 	const status = await redis.hgetall(keyStatus(broadcastId))
 	if (!status || Object.keys(status).length === 0) {
 		return null
@@ -280,6 +295,7 @@ export const getBroadcastStatus = async (broadcastId: string) => {
 }
 
 export const getBroadcastErrors = async (broadcastId: string) => {
+	const redis = getRedis()
 	const errors = await redis.lrange(keyErrors(broadcastId), 0, -1)
 	return errors.map((item) => {
 		try {
@@ -291,6 +307,7 @@ export const getBroadcastErrors = async (broadcastId: string) => {
 }
 
 export const getBroadcastLogs = async (broadcastId: string, limit = 200) => {
+	const redis = getRedis()
 	const logs = await redis.lrange(keyLogs(broadcastId), -limit, -1)
 	return logs.map((item) => {
 		try {
@@ -302,10 +319,11 @@ export const getBroadcastLogs = async (broadcastId: string, limit = 200) => {
 }
 
 export const requestStop = async (broadcastId: string) => {
+	const redis = getRedis()
 	await redis.set(keyStop(broadcastId), '1')
 	await updateState(broadcastId, 'stopping')
 
-	const waitingJobs = await broadcastQueue.getJobs(['waiting', 'delayed'])
+	const waitingJobs = await getBroadcastQueue().getJobs(['waiting', 'delayed'])
 	const toRemove = waitingJobs.filter((job) => job.data.broadcastId === broadcastId)
 	if (toRemove.length > 0) {
 		await Promise.all(toRemove.map((job) => job.remove()))
@@ -331,6 +349,7 @@ export const queueBroadcast = async (data: {
 		captionMode: data.captionMode,
 		delayMs: data.delayMs,
 	})
+	ensureWorker()
 	await enqueueBatches({
 		broadcastId: data.broadcastId,
 		startIndex: 0,
@@ -353,8 +372,10 @@ export const resumeBroadcast = async (broadcastId: string) => {
 	}
 	const cursor = Number(status.cursor ?? 0)
 	const total = Number(status.total ?? 0)
+	const redis = getRedis()
 	await redis.del(keyStop(broadcastId))
 	await updateState(broadcastId, 'queued')
+	ensureWorker()
 	await enqueueBatches({
 		broadcastId,
 		startIndex: cursor,
