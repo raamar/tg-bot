@@ -191,6 +191,13 @@ const checkDone = async (broadcastId: string) => {
 		const stopFlag = await redis.get(keyStop(broadcastId))
 		await redis.hset(statusKey, 'finishedAt', Date.now())
 		await updateState(broadcastId, stopFlag ? 'stopped' : 'completed')
+		if (!stopFlag) {
+			const waitingJobs = await getBroadcastQueue().getJobs(['waiting', 'delayed'])
+			const toRemove = waitingJobs.filter((job) => job.data.broadcastId === broadcastId)
+			if (toRemove.length > 0) {
+				await Promise.all(toRemove.map((job) => job.remove()))
+			}
+		}
 		await setLastBroadcastId(broadcastId)
 	}
 }
@@ -227,13 +234,16 @@ const enqueueBatches = async (params: {
 	delayMs: number
 }) => {
 	const { broadcastId, startIndex, total, messageHtml, media, captionMode, delayMs } = params
-	for (let index = startIndex; index < total; index += BATCH_SIZE) {
+	let index = startIndex
+	while (index < total) {
+		const remainder = index % BATCH_SIZE
+		const currentBatchSize = remainder === 0 ? BATCH_SIZE : BATCH_SIZE - remainder
 		await getBroadcastQueue().add(
 			'batch',
 			{
 				broadcastId,
 				batchStart: index,
-				batchSize: BATCH_SIZE,
+				batchSize: Math.min(currentBatchSize, total - index),
 				messageHtml,
 				media,
 				captionMode,
@@ -245,6 +255,7 @@ const enqueueBatches = async (params: {
 				removeOnFail: false,
 			},
 		)
+		index += currentBatchSize
 	}
 }
 
@@ -254,9 +265,13 @@ const ensureWorker = () => {
 		BROADCAST_QUEUE,
 		async (job) => {
 			const { broadcastId, batchStart, batchSize, messageHtml, media, captionMode, delayMs } = job.data
+			const redis = getRedis()
+			const statusBefore = await redis.hget(keyStatus(broadcastId), 'state')
+			if (statusBefore === 'completed') {
+				return
+			}
 
 			await updateState(broadcastId, 'running')
-			const redis = getRedis()
 			const startedAt = await redis.hget(keyStatus(broadcastId), 'startedAt')
 			if (!startedAt) {
 				await redis.hset(keyStatus(broadcastId), 'startedAt', Date.now())
@@ -269,6 +284,10 @@ const ensureWorker = () => {
 			let lastStatusPublishAt = Date.now()
 
 			for (let index = 0; index < batch.length; index += 1) {
+				const currentState = await redis.hget(keyStatus(broadcastId), 'state')
+				if (currentState === 'completed') {
+					return
+				}
 				const stopFlag = await redis.get(keyStop(broadcastId))
 				if (stopFlag) {
 					await pushLog(broadcastId, 'warn', 'Рассылка приостановлена.')
