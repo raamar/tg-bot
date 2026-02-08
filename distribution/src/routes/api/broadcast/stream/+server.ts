@@ -1,6 +1,6 @@
 import type { RequestHandler } from './$types'
 import { createRedisSub } from '$lib/server/redis'
-import { channelEvents, getBroadcastLogs, getBroadcastStatus } from '$lib/server/broadcast'
+import { channelEvents, getBroadcastLogs, getBroadcastStatus, refreshActiveTtl } from '$lib/server/broadcast'
 
 export const GET: RequestHandler = async ({ url }) => {
 	const broadcastId = url.searchParams.get('id')
@@ -45,11 +45,15 @@ export const GET: RequestHandler = async ({ url }) => {
 			})
 
 			const bootstrap = async () => {
+				const latestStatus = await getBroadcastStatus(broadcastId)
+				if (latestStatus) {
+					send('status', latestStatus)
+				}
 				const logs = await getBroadcastLogs(broadcastId, 200)
-				send('status', status)
 				for (const log of logs) {
 					send('log', log)
 				}
+				await refreshActiveTtl()
 			}
 			void bootstrap()
 

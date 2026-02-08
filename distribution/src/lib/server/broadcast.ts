@@ -10,6 +10,9 @@ const MIN_DELAY_MS = 50
 const BATCH_SIZE = 500
 const LOG_LIMIT = 2000
 const ERROR_LIMIT = 5000
+const ACTIVE_BROADCAST_KEY = 'broadcast:active'
+const LAST_BROADCAST_KEY = 'broadcast:last'
+const UI_DRAFT_KEY = 'broadcast:ui:draft'
 
 let lastRequestAt = 0
 
@@ -55,6 +58,7 @@ const keyLogs = (id: string) => `broadcast:logs:${id}`
 const keyErrors = (id: string) => `broadcast:errors:${id}`
 const keyContacts = (id: string) => `broadcast:contacts:${id}`
 const keyMeta = (id: string) => `broadcast:meta:${id}`
+const keyUi = (id: string) => `broadcast:ui:${id}`
 export const channelEvents = (id: string) => `broadcast:events:${id}`
 
 export type BroadcastState = 'queued' | 'running' | 'stopping' | 'stopped' | 'completed'
@@ -71,6 +75,18 @@ export interface BroadcastStatus {
 	finishedAt?: number
 	messagePreview?: string
 	cursor?: number
+}
+
+export interface BroadcastUiState {
+	step: number
+	mode: 'all' | 'single' | 'csv' | 'manual'
+	messageHtml: string
+	delayMs: number
+	singleId: string
+	manualList: string
+	fileStats: { total: number; nonEmpty: number; unique: number; duplicates: number } | null
+	draftId: string | null
+	mediaItems: { key: string; name: string; type: 'photo' | 'video'; size: number }[]
 }
 
 export const pushLog = async (
@@ -136,6 +152,7 @@ const checkDone = async (broadcastId: string) => {
 		const stopFlag = await redis.get(keyStop(broadcastId))
 		await redis.hset(statusKey, 'finishedAt', Date.now())
 		await updateState(broadcastId, stopFlag ? 'stopped' : 'completed')
+		await setLastBroadcastId(broadcastId)
 	}
 }
 
@@ -318,6 +335,100 @@ export const getBroadcastLogs = async (broadcastId: string, limit = 200) => {
 	})
 }
 
+export const getActiveBroadcastId = async () => {
+	const redis = getRedis()
+	return redis.get(ACTIVE_BROADCAST_KEY)
+}
+
+export const getLastBroadcastId = async () => {
+	const redis = getRedis()
+	return redis.get(LAST_BROADCAST_KEY)
+}
+
+export const setActiveBroadcastId = async (broadcastId: string) => {
+	const redis = getRedis()
+	await redis.set(ACTIVE_BROADCAST_KEY, broadcastId, 'EX', TTL_SECONDS)
+}
+
+export const setLastBroadcastId = async (broadcastId: string) => {
+	const redis = getRedis()
+	await redis.set(LAST_BROADCAST_KEY, broadcastId, 'EX', TTL_SECONDS)
+}
+
+export const clearActiveBroadcastId = async (broadcastId?: string) => {
+	const redis = getRedis()
+	if (!broadcastId) {
+		await redis.del(ACTIVE_BROADCAST_KEY)
+		return
+	}
+	const current = await redis.get(ACTIVE_BROADCAST_KEY)
+	if (current === broadcastId) {
+		await redis.del(ACTIVE_BROADCAST_KEY)
+	}
+}
+
+export const clearLastBroadcastId = async () => {
+	const redis = getRedis()
+	await redis.del(LAST_BROADCAST_KEY)
+}
+
+export const refreshActiveTtl = async () => {
+	const redis = getRedis()
+	await redis.expire(ACTIVE_BROADCAST_KEY, TTL_SECONDS)
+}
+
+export const saveDraftUiState = async (state: BroadcastUiState) => {
+	const redis = getRedis()
+	await redis.set(UI_DRAFT_KEY, JSON.stringify(state), 'EX', TTL_SECONDS)
+}
+
+export const getDraftUiState = async () => {
+	const redis = getRedis()
+	const raw = await redis.get(UI_DRAFT_KEY)
+	return raw ? (JSON.parse(raw) as BroadcastUiState) : null
+}
+
+export const clearDraftUiState = async () => {
+	const redis = getRedis()
+	await redis.del(UI_DRAFT_KEY)
+}
+
+export const saveBroadcastUiState = async (broadcastId: string, state: BroadcastUiState) => {
+	const redis = getRedis()
+	await redis.set(keyUi(broadcastId), JSON.stringify(state), 'EX', TTL_SECONDS)
+}
+
+export const getBroadcastUiState = async (broadcastId: string) => {
+	const redis = getRedis()
+	const raw = await redis.get(keyUi(broadcastId))
+	return raw ? (JSON.parse(raw) as BroadcastUiState) : null
+}
+
+export const moveDraftUiStateToBroadcast = async (broadcastId: string) => {
+	const redis = getRedis()
+	const draftRaw = await redis.get(UI_DRAFT_KEY)
+	if (!draftRaw) return
+	await redis.set(keyUi(broadcastId), draftRaw, 'EX', TTL_SECONDS)
+	await redis.del(UI_DRAFT_KEY)
+}
+
+export const clearBroadcastUiState = async (broadcastId: string) => {
+	const redis = getRedis()
+	await redis.del(keyUi(broadcastId))
+}
+
+export const finishBroadcastSession = async (broadcastId: string) => {
+	const status = await getBroadcastStatus(broadcastId)
+	if (status && status.state !== 'completed' && status.state !== 'stopped') {
+		await requestStop(broadcastId)
+	}
+
+	await clearActiveBroadcastId(broadcastId)
+	await clearLastBroadcastId()
+	await clearBroadcastUiState(broadcastId)
+	await clearDraftUiState()
+}
+
 export const requestStop = async (broadcastId: string) => {
 	const redis = getRedis()
 	await redis.set(keyStop(broadcastId), '1')
@@ -331,6 +442,7 @@ export const requestStop = async (broadcastId: string) => {
 		await publishStatus(broadcastId)
 	}
 	await updateState(broadcastId, 'stopped')
+	await setLastBroadcastId(broadcastId)
 }
 
 export const queueBroadcast = async (data: {
@@ -349,6 +461,8 @@ export const queueBroadcast = async (data: {
 		captionMode: data.captionMode,
 		delayMs: data.delayMs,
 	})
+	await setActiveBroadcastId(data.broadcastId)
+	await setLastBroadcastId(data.broadcastId)
 	ensureWorker()
 	await enqueueBatches({
 		broadcastId: data.broadcastId,
@@ -375,6 +489,7 @@ export const resumeBroadcast = async (broadcastId: string) => {
 	const redis = getRedis()
 	await redis.del(keyStop(broadcastId))
 	await updateState(broadcastId, 'queued')
+	await setActiveBroadcastId(broadcastId)
 	ensureWorker()
 	await enqueueBatches({
 		broadcastId,

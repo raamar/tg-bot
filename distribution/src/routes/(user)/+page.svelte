@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte'
 	import { Editor, Mark, mergeAttributes } from '@tiptap/core'
 	import StarterKit from '@tiptap/starter-kit'
 	import Underline from '@tiptap/extension-underline'
@@ -14,12 +15,13 @@
 		}),
 		parseHTML: () => [{ tag: 'span.tg-spoiler' }],
 		renderHTML: ({ HTMLAttributes }) => ['span', mergeAttributes(HTMLAttributes), 0],
-		addCommands: () => ({
+		addCommands: () =>
+			({
 			toggleSpoiler:
 				() =>
-				({ commands }) =>
+				({ commands }: any) =>
 					commands.toggleMark('spoiler'),
-		}),
+			}) as any,
 	})
 
 	type Mode = 'all' | 'single' | 'csv' | 'manual'
@@ -54,6 +56,21 @@
 		draftId: string | null
 		mediaItems: MediaItem[]
 		isUploadingMedia: boolean
+		isHydrating: boolean
+		isLocked: boolean
+		lockBroadcastId: string | null
+	}
+
+	type UiStatePayload = {
+		step: number
+		mode: Mode
+		messageHtml: string
+		delayMs: number
+		singleId: string
+		manualList: string
+		fileStats: { total: number; nonEmpty: number; unique: number; duplicates: number } | null
+		draftId: string | null
+		mediaItems: { key: string; name: string; type: 'photo' | 'video'; size: number }[]
 	}
 
 	let state = $state<BroadcastState>({
@@ -76,6 +93,9 @@
 		draftId: null,
 		mediaItems: [],
 		isUploadingMedia: false,
+		isHydrating: false,
+		isLocked: false,
+		lockBroadcastId: null,
 	})
 
 	const MIN_DELAY = 50
@@ -103,6 +123,17 @@
 		return `${perSecond} сообщений/сек`
 	})
 
+	const statusLabel = $derived.by(() => {
+		const value = state.status?.state
+		if (!value) return '—'
+		if (value === 'stopped') return 'Пауза'
+		if (value === 'running') return 'Выполняется'
+		if (value === 'queued') return 'В очереди'
+		if (value === 'stopping') return 'Останавливается'
+		if (value === 'completed') return 'Завершена'
+		return value
+	})
+
 	const attachSse = (id: string) => {
 		state.eventSource?.close()
 		state.eventSource = new EventSource(`/api/broadcast/stream?id=${id}`)
@@ -116,12 +147,20 @@
 
 		state.eventSource.addEventListener('log', (event) => {
 			const entry = JSON.parse((event as MessageEvent).data) as LogEntry
-			state.logs = [...state.logs, entry]
+			const exists = state.logs.some((item) => item.ts === entry.ts && item.message === entry.message)
+			if (!exists) {
+				state.logs = [...state.logs, entry]
+			}
 		})
 
 		state.eventSource.addEventListener('issue', (event) => {
 			const entry = JSON.parse((event as MessageEvent).data) as ErrorEntry
-			state.errors = [...state.errors, entry]
+			const exists = state.errors.some(
+				(item) => item.ts === entry.ts && item.contactId === entry.contactId && item.reason === entry.reason,
+			)
+			if (!exists) {
+				state.errors = [...state.errors, entry]
+			}
 		})
 	}
 
@@ -134,6 +173,51 @@
 
 	const clampDelay = () => {
 		if (state.delayMs < MIN_DELAY) state.delayMs = MIN_DELAY
+	}
+
+	const getUiStatePayload = (): UiStatePayload => ({
+		step: state.step,
+		mode: state.mode,
+		messageHtml: state.messageHtml,
+		delayMs: state.delayMs,
+		singleId: state.singleId,
+		manualList: state.manualList,
+		fileStats: state.fileStats,
+		draftId: state.draftId,
+		mediaItems: state.mediaItems.map((item) => ({
+			key: item.key,
+			name: item.name,
+			type: item.type,
+			size: item.size,
+		})),
+	})
+
+	const applyUiState = (payload: UiStatePayload | null) => {
+		if (!payload) return
+		state.step = payload.step
+		state.mode = payload.mode
+		state.messageHtml = payload.messageHtml
+		state.delayMs = payload.delayMs
+		state.singleId = payload.singleId
+		state.manualList = payload.manualList
+		state.fileStats = payload.fileStats
+		state.draftId = payload.draftId
+		state.mediaItems = payload.mediaItems.map((item) => ({
+			...item,
+			previewUrl: '',
+		}))
+	}
+
+	const persistUiState = async () => {
+		if (!isBrowser || state.isHydrating) return
+		await fetch('/api/broadcast/ui', {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({
+				broadcastId: state.broadcastId,
+				state: getUiStatePayload(),
+			}),
+		})
 	}
 
 	const uploadMedia = async (files: FileList | null) => {
@@ -187,6 +271,10 @@
 	}
 
 	const startBroadcast = async () => {
+		if (state.isLocked) {
+			state.step = 3
+			return
+		}
 		state.errorMessage = ''
 		state.isSubmitting = true
 		state.logs = []
@@ -212,6 +300,7 @@
 			if (state.mode === 'manual') {
 				form.set('manualList', state.manualList)
 			}
+			form.set('uiState', JSON.stringify(getUiStatePayload()))
 
 			const response = await fetch('/api/broadcast/start', {
 				method: 'POST',
@@ -220,12 +309,21 @@
 
 			const data = await response.json()
 			if (!response.ok) {
+				if (response.status === 409 && data.broadcastId) {
+					state.broadcastId = data.broadcastId
+					state.lockBroadcastId = data.broadcastId
+					state.isLocked = true
+					state.step = 3
+					attachSse(data.broadcastId)
+				}
 				state.errorMessage = `Ошибка запуска: ${data.error ?? 'UNKNOWN'}`
 				return
 			}
 
 			state.broadcastId = data.broadcastId
-			attachSse(state.broadcastId)
+			state.lockBroadcastId = data.broadcastId
+			state.isLocked = true
+			attachSse(data.broadcastId)
 			state.step = 3
 		} catch (error) {
 			state.errorMessage = error instanceof Error ? error.message : 'Не удалось запустить рассылку'
@@ -234,13 +332,60 @@
 		}
 	}
 
-	const stopBroadcast = async () => {
+	const pauseBroadcast = async () => {
 		if (!state.broadcastId) return
 		await fetch('/api/broadcast/stop', {
 			method: 'POST',
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({ id: state.broadcastId }),
 		})
+	}
+
+	const resetToInitial = () => {
+		state.step = 1
+		state.mode = 'manual'
+		state.messageHtml = ''
+		state.delayMs = 100
+		state.singleId = ''
+		state.manualList = ''
+		state.contactsFile = null
+		state.fileStats = null
+		state.errorMessage = ''
+		state.broadcastId = null
+		state.status = null
+		state.logs = []
+		state.errors = []
+		state.eventSource?.close()
+		state.eventSource = null
+		state.draftId = null
+		state.mediaItems = []
+		state.isLocked = false
+		state.lockBroadcastId = null
+	}
+
+	const finishSession = async () => {
+		if (!state.broadcastId) {
+			resetToInitial()
+			return
+		}
+		const confirmed = window.confirm(
+			'Очистить текущую сессию? После этого аудиторию и сообщение нужно будет настроить заново.',
+		)
+		if (!confirmed) {
+			return
+		}
+		state.errorMessage = ''
+		const response = await fetch('/api/broadcast/finish', {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ id: state.broadcastId }),
+		})
+		if (!response.ok) {
+			const data = await response.json()
+			state.errorMessage = `Ошибка завершения: ${data.error ?? 'UNKNOWN'}`
+			return
+		}
+		resetToInitial()
 	}
 
 	const resumeBroadcast = async () => {
@@ -280,16 +425,7 @@
 		const editor = new Editor({
 			element: node,
 			extensions: [
-				StarterKit.configure({
-					bold: true,
-					italic: true,
-					strike: true,
-					code: true,
-					blockquote: true,
-					bulletList: true,
-					orderedList: true,
-					hardBreak: true,
-				}),
+				StarterKit,
 				Underline,
 				Link.configure({ openOnClick: false }),
 				Spoiler,
@@ -324,10 +460,12 @@
 	}
 
 	const onBackClick = () => {
+		if (state.isLocked) return
 		if (state.step > 1) state.step -= 1
 	}
 
 	const onNextClick = () => {
+		if (state.isLocked) return
 		if (state.step === 1) state.step = 2
 	}
 
@@ -335,8 +473,12 @@
 		void startBroadcast()
 	}
 
-	const onStopClick = () => {
-		void stopBroadcast()
+	const onPauseClick = () => {
+		void pauseBroadcast()
+	}
+
+	const onFinishClick = () => {
+		void finishSession()
 	}
 
 	const onResumeClick = () => {
@@ -371,6 +513,7 @@
 	}
 
 	const onModeChange = (event: Event) => {
+		if (state.isLocked) return
 		const target = event.currentTarget as HTMLInputElement
 		state.mode = target.value as Mode
 	}
@@ -378,6 +521,70 @@
 	const onReady = (editor: Editor) => {
 		state.editor = editor
 	}
+
+	onMount(() => {
+		const hydrate = async () => {
+			state.isHydrating = true
+			try {
+				const response = await fetch('/api/broadcast/active')
+				if (!response.ok) return
+				const data = (await response.json()) as {
+					active: {
+						broadcastId: string
+						status: StatusPayload
+						ui: UiStatePayload | null
+						logs: LogEntry[]
+						errors: ErrorEntry[]
+					} | null
+					last: {
+						broadcastId: string
+						status: StatusPayload
+						ui: UiStatePayload | null
+						logs: LogEntry[]
+						errors: ErrorEntry[]
+					} | null
+					draft: UiStatePayload | null
+				}
+
+				if (data.active) {
+					state.broadcastId = data.active.broadcastId
+					state.lockBroadcastId = data.active.broadcastId
+					state.isLocked = true
+					state.status = data.active.status
+					state.step = 3
+					applyUiState(data.active.ui)
+					state.step = 3
+					state.logs = data.active.logs ?? []
+					state.errors = data.active.errors ?? []
+					attachSse(data.active.broadcastId)
+					return
+				}
+
+				if (data.last) {
+					state.broadcastId = data.last.broadcastId
+					state.lockBroadcastId = null
+					state.isLocked = false
+					state.status = data.last.status
+					state.step = 3
+					applyUiState(data.last.ui)
+					state.step = 3
+					state.logs = data.last.logs ?? []
+					state.errors = data.last.errors ?? []
+					return
+				}
+
+				state.isLocked = false
+				state.lockBroadcastId = null
+				if (data.draft) {
+					applyUiState(data.draft)
+				}
+			} finally {
+				state.isHydrating = false
+			}
+		}
+
+		void hydrate()
+	})
 
 	const computeFileStats = async () => {
 		if (!state.contactsFile) {
@@ -417,7 +624,7 @@
 	}
 
 	const onSpoilerClick = () => {
-		state.editor?.chain().focus().toggleSpoiler().run()
+		state.editor?.chain().focus().toggleMark('spoiler').run()
 	}
 
 	const onQuoteClick = () => {
@@ -447,6 +654,37 @@
 			current?.close()
 		}
 	})
+
+	const persistSignature = $derived.by(() =>
+		JSON.stringify({
+			broadcastId: state.broadcastId,
+			step: state.step,
+			mode: state.mode,
+			messageHtml: state.messageHtml,
+			delayMs: state.delayMs,
+			singleId: state.singleId,
+			manualList: state.manualList,
+			fileStats: state.fileStats,
+			draftId: state.draftId,
+			mediaItems: state.mediaItems.map((item) => ({
+				key: item.key,
+				name: item.name,
+				type: item.type,
+				size: item.size,
+			})),
+		}),
+	)
+
+	$effect(() => {
+		if (!isBrowser || state.isHydrating) return
+		const _signature = persistSignature
+		const timer = setTimeout(() => {
+			void persistUiState()
+		}, 300)
+		return () => {
+			clearTimeout(timer)
+		}
+	})
 </script>
 
 <section class="space-y-3">
@@ -464,18 +702,24 @@
 			<span class={`badge ${state.step === 3 ? 'text-text' : ''}`}>3. Процесс</span>
 		</div>
 		<div class="flex gap-2">
-			{#if state.step > 1}
-				<button class="btn btn-secondary" onclick={onBackClick}>Назад</button>
+			{#if state.step > 1 && !state.isLocked}
+				<button class="btn btn-secondary px-3 py-1.5 text-sm" onclick={onBackClick}>Назад</button>
 			{/if}
-			{#if state.step === 1}
-				<button class="btn btn-primary" onclick={onNextClick}>Дальше</button>
-			{:else if state.step === 2}
-				<button class="btn btn-primary" onclick={onStartClick} disabled={state.isSubmitting}>
+			{#if state.step === 1 && !state.isLocked}
+				<button class="btn btn-primary px-3 py-1.5 text-sm" onclick={onNextClick}>Дальше</button>
+			{:else if state.step === 2 && !state.isLocked}
+				<button class="btn btn-primary px-3 py-1.5 text-sm" onclick={onStartClick} disabled={state.isSubmitting}>
 					{state.isSubmitting ? 'Запуск...' : 'Запустить'}
 				</button>
 			{/if}
 		</div>
 	</div>
+	{#if state.isLocked && state.lockBroadcastId}
+		<p class="body-s mt-2 text-text-muted">
+			Активная сессия рассылки: <span class="text-text">{state.lockBroadcastId}</span>. Настройка новой
+			рассылки временно заблокирована.
+		</p>
+	{/if}
 </section>
 
 {#if state.step === 1}
@@ -491,19 +735,19 @@
 
 			<div class="grid gap-4 md:grid-cols-2">
 				<label class="flex items-center gap-3">
-					<input type="radio" name="mode" value="manual" checked={state.mode === 'manual'} onchange={onModeChange} />
+					<input type="radio" name="mode" value="manual" checked={state.mode === 'manual'} onchange={onModeChange} disabled={state.isLocked} />
 					<span class="body-m">Ручной список</span>
 				</label>
 				<label class="flex items-center gap-3">
-					<input type="radio" name="mode" value="csv" checked={state.mode === 'csv'} onchange={onModeChange} />
+					<input type="radio" name="mode" value="csv" checked={state.mode === 'csv'} onchange={onModeChange} disabled={state.isLocked} />
 					<span class="body-m">Загрузка через файл</span>
 				</label>
 				<label class="flex items-center gap-3">
-					<input type="radio" name="mode" value="single" checked={state.mode === 'single'} onchange={onModeChange} />
+					<input type="radio" name="mode" value="single" checked={state.mode === 'single'} onchange={onModeChange} disabled={state.isLocked} />
 					<span class="body-m">Один контакт</span>
 				</label>
 				<label class="flex items-center gap-3">
-					<input type="radio" name="mode" value="all" checked={state.mode === 'all'} onchange={onModeChange} />
+					<input type="radio" name="mode" value="all" checked={state.mode === 'all'} onchange={onModeChange} disabled={state.isLocked} />
 					<span class="body-m">Все пользователи</span>
 				</label>
 			</div>
@@ -517,6 +761,7 @@
 						value={state.manualList}
 						oninput={onManualInput}
 						placeholder={`123456789\n987654321`}
+						disabled={state.isLocked}
 					></textarea>
 				</div>
 			{/if}
@@ -530,6 +775,7 @@
 						type="file"
 						accept=".txt,text/plain"
 						onchange={onCsvChange}
+						disabled={state.isLocked}
 					/>
 					<p class="input-help mt-2">Формат: каждый telegramId в отдельной строке.</p>
 					{#if state.fileStats}
@@ -552,6 +798,7 @@
 						value={state.singleId}
 						oninput={onSingleInput}
 						placeholder="123456789"
+						disabled={state.isLocked}
 					/>
 				</div>
 			{/if}
@@ -576,6 +823,7 @@
 					step="50"
 					value={state.delayMs}
 					oninput={onDelayInput}
+					disabled={state.isLocked}
 				/>
 				<p class="input-help mt-2">
 					Текущая задержка: {state.delayMs} мс.
@@ -611,7 +859,7 @@
 					multiple
 					accept="image/*,video/*"
 					onchange={onFileChange}
-					disabled={state.isUploadingMedia}
+					disabled={state.isUploadingMedia || state.isLocked}
 				/>
 				<p class="input-help">До 10 файлов. Храним временно и отправляем как альбом.</p>
 
@@ -620,11 +868,23 @@
 						{#each state.mediaItems as item}
 							<div class="rounded-md border border-border bg-surface-2 p-3">
 								{#if item.type === 'photo'}
-									<img src={item.previewUrl} alt={item.name} class="h-32 w-full rounded-md object-cover" />
+									{#if item.previewUrl}
+										<img src={item.previewUrl} alt={item.name} class="h-32 w-full rounded-md object-cover" />
+									{:else}
+										<div class="flex h-32 w-full items-center justify-center rounded-md border border-border bg-surface text-text-muted">
+											Превью недоступно после перезагрузки
+										</div>
+									{/if}
 								{:else}
-									<video src={item.previewUrl} class="h-32 w-full rounded-md object-cover" controls>
-										<track kind="captions" />
-									</video>
+									{#if item.previewUrl}
+										<video src={item.previewUrl} class="h-32 w-full rounded-md object-cover" controls>
+											<track kind="captions" />
+										</video>
+									{:else}
+										<div class="flex h-32 w-full items-center justify-center rounded-md border border-border bg-surface text-text-muted">
+											Видео без превью (после перезагрузки)
+										</div>
+									{/if}
 								{/if}
 								<p class="body-s mt-2 text-text-muted">{item.name}</p>
 							</div>
@@ -713,14 +973,22 @@
 {#if state.step === 3}
 	<section class="grid gap-6 lg:grid-cols-3">
 		<div class="card space-y-4 lg:col-span-2">
-			<div class="flex items-center justify-between">
+			<div class="flex flex-wrap items-center justify-between gap-2">
 				<div>
 					<p class="body-s uppercase tracking-wide text-text-muted">Процесс</p>
 					<h2 class="h2 mt-2">Прогресс</h2>
 				</div>
-				{#if state.status?.state === 'stopped'}
-					<button class="btn btn-primary" onclick={onResumeClick}>Продолжить</button>
-				{/if}
+				<div class="flex flex-wrap items-center gap-2">
+					{#if state.status?.state === 'stopped'}
+						<button class="btn btn-primary px-3 py-1.5 text-sm" onclick={onResumeClick}>Продолжить</button>
+					{/if}
+					{#if state.status?.state === 'running' || state.status?.state === 'queued' || state.status?.state === 'stopping'}
+						<button class="btn btn-secondary px-3 py-1.5 text-sm" onclick={onPauseClick}>Пауза</button>
+					{/if}
+					<button class="btn btn-secondary px-3 py-1.5 text-sm" onclick={onFinishClick}>
+						Очистить
+					</button>
+				</div>
 			</div>
 
 			<div class="space-y-3">
@@ -731,7 +999,7 @@
 			</div>
 
 			<div class="grid gap-2">
-				<p class="body-m">Состояние: <span class="text-text-muted">{state.status?.state ?? '—'}</span></p>
+				<p class="body-m">Состояние: <span class="text-text-muted">{statusLabel}</span></p>
 				<p class="body-m">ID: <span class="text-text-muted">{state.broadcastId ?? '—'}</span></p>
 				<p class="body-m">Создано: <span class="text-text-muted">{formatDate(state.status?.createdAt)}</span></p>
 				<p class="body-m">Старт: <span class="text-text-muted">{formatDate(state.status?.startedAt)}</span></p>

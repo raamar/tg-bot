@@ -8,6 +8,12 @@ import {
 	queueBroadcast,
 	pushLog as _pushLog,
 	pushError as _pushError,
+	getActiveBroadcastId,
+	getBroadcastStatus,
+	setActiveBroadcastId,
+	saveBroadcastUiState,
+	moveDraftUiStateToBroadcast,
+	type BroadcastUiState,
 } from '$lib/server/broadcast'
 import { getDraftMedia, clearDraftMedia, type DraftMediaItem } from '$lib/server/mediaStore'
 import { uploadMedia, uploadMediaGroup } from '$lib/server/telegram'
@@ -99,7 +105,10 @@ const prepareMediaForBroadcast = async (
 	messageHtml: string,
 	messageText: string,
 	mediaChatId: string,
-) => {
+): Promise<{
+	media: { type: 'photo' | 'video'; fileId: string }[]
+	captionMode: 'caption' | 'separate' | 'none'
+}> => {
 	if (mediaItems.length === 0) {
 		return { media: [], captionMode: 'none' as const }
 	}
@@ -144,6 +153,18 @@ export const POST: RequestHandler = async ({ request }) => {
 	const draftId = String(form.get('draftId') ?? '').trim() || null
 	const mediaKeysRaw = String(form.get('mediaKeys') ?? '')
 	const mediaKeys = mediaKeysRaw ? mediaKeysRaw.split(',').map((item) => item.trim()).filter(Boolean) : []
+	const uiStateRaw = String(form.get('uiState') ?? '').trim()
+
+	const activeBroadcastId = await getActiveBroadcastId()
+	if (activeBroadcastId) {
+		const activeStatus = await getBroadcastStatus(activeBroadcastId)
+		if (activeStatus) {
+			return json(
+				{ error: 'ACTIVE_BROADCAST', broadcastId: activeBroadcastId, state: activeStatus.state },
+				{ status: 409 },
+			)
+		}
+	}
 
 	let contacts: string[] = []
 
@@ -258,6 +279,20 @@ export const POST: RequestHandler = async ({ request }) => {
 		captionMode,
 		delayMs,
 	})
+	await setActiveBroadcastId(broadcastId)
+	await moveDraftUiStateToBroadcast(broadcastId)
+
+	let parsedUiState: BroadcastUiState | null = null
+	if (uiStateRaw) {
+		try {
+			parsedUiState = JSON.parse(uiStateRaw) as BroadcastUiState
+		} catch {
+			parsedUiState = null
+		}
+	}
+	if (parsedUiState) {
+		await saveBroadcastUiState(broadcastId, { ...parsedUiState, step: 3 })
+	}
 
 	if (draftId) {
 		await clearDraftMedia(draftId)
