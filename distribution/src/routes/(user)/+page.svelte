@@ -737,12 +737,6 @@
 			{/if}
 		</div>
 	</div>
-	{#if state.isLocked && state.lockBroadcastId}
-		<p class="body-s mt-2 text-text-muted">
-			Активная сессия рассылки: <span class="text-text">{state.lockBroadcastId}</span>. Настройка новой
-			рассылки временно заблокирована.
-		</p>
-	{/if}
 </section>
 
 {#if state.step === 1}
