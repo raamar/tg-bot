@@ -14,6 +14,8 @@ const ACTIVE_BROADCAST_KEY = 'broadcast:active'
 const LAST_BROADCAST_KEY = 'broadcast:last'
 const UI_DRAFT_KEY = 'broadcast:ui:draft'
 const STATUS_PUBLISH_INTERVAL_MS = 1000
+const RATE_WINDOW_SIZE = 120
+const EMA_ALPHA = 0.2
 
 let lastRequestAt = 0
 
@@ -60,6 +62,7 @@ const keyErrors = (id: string) => `broadcast:errors:${id}`
 const keyContacts = (id: string) => `broadcast:contacts:${id}`
 const keyMeta = (id: string) => `broadcast:meta:${id}`
 const keyUi = (id: string) => `broadcast:ui:${id}`
+const keyDurations = (id: string) => `broadcast:durations:${id}`
 export const channelEvents = (id: string) => `broadcast:events:${id}`
 
 export type BroadcastState = 'queued' | 'running' | 'stopping' | 'stopped' | 'completed'
@@ -134,38 +137,34 @@ const publishStatus = async (broadcastId: string) => {
 	const status = await redis.hgetall(statusKey)
 	if (!status || Object.keys(status).length === 0) return
 
-	const now = Date.now()
-	const cursor = Number(status.cursor ?? 0)
 	const total = Number(status.total ?? 0)
 	const success = Number(status.success ?? 0)
 	const failed = Number(status.failed ?? 0)
 	const skipped = Number(status.skipped ?? 0)
-	const prevRateTs = Number(status.rateTs ?? 0)
-	const prevRateCursor = Number(status.rateCursor ?? 0)
+	const durationsRaw = await redis.lrange(keyDurations(broadcastId), -RATE_WINDOW_SIZE, -1)
+	const durations = durationsRaw
+		.map((value) => Number(value))
+		.filter((value) => Number.isFinite(value) && value > 0)
+		.sort((a, b) => a - b)
 
-	let actualRate = Number(status.actualRate ?? 0)
-	if (status.state === 'running' || status.state === 'queued' || status.state === 'stopping') {
-		const deltaMs = now - prevRateTs
-		const deltaCursor = cursor - prevRateCursor
-		if (prevRateTs > 0 && deltaMs > 0 && deltaCursor >= 0) {
-			actualRate = deltaCursor / (deltaMs / 1000)
-		}
-	} else {
-		actualRate = 0
-	}
+	const medianMs = durations.length > 0 ? durations[Math.floor(durations.length / 2)] : 0
+	const p50Rate = medianMs > 0 ? 1000 / medianMs : 0
+	const prevRate = Number(status.actualRate ?? 0)
+	const nextRate = prevRate > 0 ? prevRate * (1 - EMA_ALPHA) + p50Rate * EMA_ALPHA : p50Rate
+	const state = status.state
+	const isActiveState = state === 'running' || state === 'queued' || state === 'stopping'
+	const actualRate = isActiveState ? nextRate : 0
 
 	const done = success + failed + skipped
 	const remaining = Math.max(0, total - done)
 	const etaSeconds =
-		actualRate > 0 && (status.state === 'running' || status.state === 'queued' || status.state === 'stopping')
+		actualRate > 0 && isActiveState
 			? Math.ceil(remaining / actualRate)
 			: ''
 
 	await redis.hset(statusKey, {
 		actualRate: actualRate.toFixed(2),
 		etaSeconds,
-		rateTs: now,
-		rateCursor: cursor,
 	})
 	const freshStatus = await redis.hgetall(statusKey)
 	await getRedisPub().publish(channelEvents(broadcastId), JSON.stringify({ type: 'status', payload: freshStatus }))
@@ -277,6 +276,7 @@ const ensureWorker = () => {
 				}
 
 				const contactId = batch[index]
+				const attemptStartedAt = Date.now()
 				try {
 					const interval = Math.max(delayMs, MIN_DELAY_MS)
 					if (media.length === 0) {
@@ -312,6 +312,9 @@ const ensureWorker = () => {
 				}
 
 				await redis.hincrby(keyStatus(broadcastId), 'cursor', 1)
+				await redis.rpush(keyDurations(broadcastId), String(Date.now() - attemptStartedAt))
+				await redis.ltrim(keyDurations(broadcastId), -RATE_WINDOW_SIZE, -1)
+				await redis.expire(keyDurations(broadcastId), TTL_SECONDS)
 
 				const isLastInBatch = index === batch.length - 1
 				const now = Date.now()
@@ -342,13 +345,12 @@ export const initBroadcastStatus = async (status: BroadcastStatus) => {
 		cursor: status.cursor ?? 0,
 		actualRate: status.actualRate ?? 0,
 		etaSeconds: status.etaSeconds ?? '',
-		rateTs: Date.now(),
-		rateCursor: status.cursor ?? 0,
 	})
 	await redis.expire(keyStatus(status.id), TTL_SECONDS)
 	await redis.expire(keyLogs(status.id), TTL_SECONDS)
 	await redis.expire(keyErrors(status.id), TTL_SECONDS)
 	await redis.expire(keyStop(status.id), TTL_SECONDS)
+	await redis.del(keyDurations(status.id))
 	await publishStatus(status.id)
 }
 
