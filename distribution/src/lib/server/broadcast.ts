@@ -76,6 +76,8 @@ export interface BroadcastStatus {
 	finishedAt?: number
 	messagePreview?: string
 	cursor?: number
+	actualRate?: number
+	etaSeconds?: number
 }
 
 export interface BroadcastUiState {
@@ -128,8 +130,45 @@ export const pushError = async (
 
 const publishStatus = async (broadcastId: string) => {
 	const redis = getRedis()
-	const status = await redis.hgetall(keyStatus(broadcastId))
-	await getRedisPub().publish(channelEvents(broadcastId), JSON.stringify({ type: 'status', payload: status }))
+	const statusKey = keyStatus(broadcastId)
+	const status = await redis.hgetall(statusKey)
+	if (!status || Object.keys(status).length === 0) return
+
+	const now = Date.now()
+	const cursor = Number(status.cursor ?? 0)
+	const total = Number(status.total ?? 0)
+	const success = Number(status.success ?? 0)
+	const failed = Number(status.failed ?? 0)
+	const skipped = Number(status.skipped ?? 0)
+	const prevRateTs = Number(status.rateTs ?? 0)
+	const prevRateCursor = Number(status.rateCursor ?? 0)
+
+	let actualRate = Number(status.actualRate ?? 0)
+	if (status.state === 'running' || status.state === 'queued' || status.state === 'stopping') {
+		const deltaMs = now - prevRateTs
+		const deltaCursor = cursor - prevRateCursor
+		if (prevRateTs > 0 && deltaMs > 0 && deltaCursor >= 0) {
+			actualRate = deltaCursor / (deltaMs / 1000)
+		}
+	} else {
+		actualRate = 0
+	}
+
+	const done = success + failed + skipped
+	const remaining = Math.max(0, total - done)
+	const etaSeconds =
+		actualRate > 0 && (status.state === 'running' || status.state === 'queued' || status.state === 'stopping')
+			? Math.ceil(remaining / actualRate)
+			: ''
+
+	await redis.hset(statusKey, {
+		actualRate: actualRate.toFixed(2),
+		etaSeconds,
+		rateTs: now,
+		rateCursor: cursor,
+	})
+	const freshStatus = await redis.hgetall(statusKey)
+	await getRedisPub().publish(channelEvents(broadcastId), JSON.stringify({ type: 'status', payload: freshStatus }))
 }
 
 const updateState = async (broadcastId: string, state: BroadcastState) => {
@@ -301,6 +340,10 @@ export const initBroadcastStatus = async (status: BroadcastStatus) => {
 		finishedAt: status.finishedAt ?? '',
 		messagePreview: status.messagePreview ?? '',
 		cursor: status.cursor ?? 0,
+		actualRate: status.actualRate ?? 0,
+		etaSeconds: status.etaSeconds ?? '',
+		rateTs: Date.now(),
+		rateCursor: status.cursor ?? 0,
 	})
 	await redis.expire(keyStatus(status.id), TTL_SECONDS)
 	await redis.expire(keyLogs(status.id), TTL_SECONDS)

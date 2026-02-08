@@ -108,6 +108,20 @@
 		return new Date(num).toLocaleString('ru-RU')
 	}
 
+	const formatDuration = (value?: string | number | null) => {
+		if (value === null || value === undefined || value === '') return '—'
+		const secondsRaw = typeof value === 'string' ? Number(value) : value
+		if (!Number.isFinite(secondsRaw) || secondsRaw <= 0) return '—'
+		const seconds = Math.floor(secondsRaw)
+		const hours = Math.floor(seconds / 3600)
+		const minutes = Math.floor((seconds % 3600) / 60)
+		const secs = seconds % 60
+		const hh = String(hours).padStart(2, '0')
+		const mm = String(minutes).padStart(2, '0')
+		const ss = String(secs).padStart(2, '0')
+		return `${hh}:${mm}:${ss}`
+	}
+
 	const progressValue = $derived.by(() => {
 		const total = Number(state.status?.total ?? 0)
 		const success = Number(state.status?.success ?? 0)
@@ -133,6 +147,15 @@
 		if (value === 'completed') return 'Завершена'
 		return value
 	})
+
+	const actualRateLabel = $derived.by(() => {
+		const raw = state.status?.actualRate
+		const rate = raw ? Number(raw) : 0
+		if (!Number.isFinite(rate) || rate <= 0) return '—'
+		return `${rate.toFixed(1)} msg/s`
+	})
+
+	const etaLabel = $derived.by(() => formatDuration(state.status?.etaSeconds))
 
 	const attachSse = (id: string) => {
 		state.eventSource?.close()
@@ -996,6 +1019,10 @@
 					<div class="h-full bg-accent" style={`width: ${progressValue}%`}></div>
 				</div>
 				<p class="body-s text-text-muted">Прогресс: {progressValue}%</p>
+				<div class="grid gap-1 text-sm text-text-muted">
+					<p>Фактическая скорость: {actualRateLabel}</p>
+					<p>Примерное оставшееся время: {etaLabel}</p>
+				</div>
 			</div>
 
 			<div class="grid gap-2">
