@@ -13,6 +13,7 @@ const ERROR_LIMIT = 5000
 const ACTIVE_BROADCAST_KEY = 'broadcast:active'
 const LAST_BROADCAST_KEY = 'broadcast:last'
 const UI_DRAFT_KEY = 'broadcast:ui:draft'
+const STATUS_PUBLISH_INTERVAL_MS = 1000
 
 let lastRequestAt = 0
 
@@ -227,6 +228,7 @@ const ensureWorker = () => {
 			const contacts = await getContacts(broadcastId)
 			const batch = contacts.slice(batchStart, batchStart + batchSize)
 			if (batch.length === 0) return
+			let lastStatusPublishAt = Date.now()
 
 			for (let index = 0; index < batch.length; index += 1) {
 				const stopFlag = await redis.get(keyStop(broadcastId))
@@ -271,9 +273,15 @@ const ensureWorker = () => {
 				}
 
 				await redis.hincrby(keyStatus(broadcastId), 'cursor', 1)
+
+				const isLastInBatch = index === batch.length - 1
+				const now = Date.now()
+				if (isLastInBatch || now - lastStatusPublishAt >= STATUS_PUBLISH_INTERVAL_MS) {
+					await publishStatus(broadcastId)
+					lastStatusPublishAt = now
+				}
 			}
 
-			await publishStatus(broadcastId)
 			await checkDone(broadcastId)
 		},
 		{ connection: getRedis(), concurrency: DEFAULT_CONCURRENCY },
