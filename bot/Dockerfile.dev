@@ -1,13 +1,17 @@
 FROM node:20-slim
 
-RUN apt-get update -y && apt-get install -y openssl
-
-WORKDIR /app
-
+WORKDIR /repo
+RUN apt-get update && apt-get install -y curl openssl && rm -rf /var/lib/apt/lists/*
 RUN npm install -g pnpm
 
-COPY package.json pnpm-lock.yaml ./
+# workspace manifests (без lock)
+COPY package.json pnpm-workspace.yaml ./
+COPY bot/package.json bot/package.json
+COPY packages/db/package.json packages/db/package.json
+COPY packages/db ./packages/db
 
-RUN pnpm install --frozen-lockfile
+# ставим зависимости (без frozen)
+RUN pnpm install --no-frozen-lockfile --filter @app/db... --filter ./bot...
+RUN pnpm --filter @app/db db:generate
 
-CMD ["sh", "-c", "pnpm db:push || pnpm db:deploy && pnpm dev"]
+CMD ["sh", "-lc", "pnpm --filter @app/db db:generate && pnpm dev"]

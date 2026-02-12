@@ -1,0 +1,15 @@
+FROM node:20-slim
+
+WORKDIR /repo
+RUN apt-get update && apt-get install -y curl openssl && rm -rf /var/lib/apt/lists/*
+RUN npm install -g pnpm
+
+COPY package.json pnpm-workspace.yaml ./
+COPY partner_bot/package.json partner_bot/package.json
+COPY packages/db/package.json packages/db/package.json
+COPY packages/db ./packages/db
+
+RUN pnpm install --no-frozen-lockfile --filter @app/db... --filter ./partner_bot...
+RUN pnpm --filter @app/db db:generate
+
+CMD ["sh", "-lc", "pnpm --filter @app/db db:generate && pnpm dev"]

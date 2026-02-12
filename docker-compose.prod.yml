@@ -1,7 +1,8 @@
 services:
   traefik:
-    image: traefik:v2.11
+    profiles: ['traefik']
     container_name: traefik
+    image: traefik:v2.11
     restart: always
     command:
       - --entrypoints.web.address=:80
@@ -10,6 +11,7 @@ services:
       - --entrypoints.websecure.address=:443
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=traefik_net
       - --certificatesresolvers.le.acme.httpchallenge=true
       - --certificatesresolvers.le.acme.httpchallenge.entrypoint=web
       - --certificatesresolvers.le.acme.email=${LETSENCRYPT_EMAIL}
@@ -20,15 +22,16 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./letsencrypt:/letsencrypt
+    networks:
+      - traefik_net
 
   api:
-    build:
-      context: ./api
-      dockerfile: Dockerfile
+    image: localhost:5000/bot-a-api:latest
     environment:
-      - NODE_ENV=${NODE_ENV:-development}
+      - NODE_ENV=production
       - REDIS_URL=redis://redis:6379
       - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+      - TELEGRAM_TOKEN_2=${TELEGRAM_TOKEN_2}
       - CLOUDPAYMENTS_API_SECRET=${CLOUDPAYMENTS_API_SECRET}
     labels:
       - 'traefik.enable=true'
@@ -36,6 +39,7 @@ services:
       - 'traefik.http.routers.api.entrypoints=websecure'
       - 'traefik.http.routers.api.tls.certresolver=le'
       - 'traefik.http.services.api.loadbalancer.server.port=3000'
+      - 'traefik.docker.network=traefik_net'
     depends_on:
       - redis
     healthcheck:
@@ -44,16 +48,26 @@ services:
       timeout: 5s
       retries: 3
       start_period: 5s
+    networks:
+      - default
+      - traefik_net
+
+  db-migrate:
+    image: localhost:5000/bot-a-db-migrate:latest
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    depends_on:
+      - db
+    networks:
+      - default
 
   bot:
-    build:
-      context: ./bot
-      dockerfile: Dockerfile
+    image: localhost:5000/bot-a-bot:latest
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - REDIS_URL=redis://redis:6379
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       - TELEGRAM_WEBHOOK_URL=${TELEGRAM_WEBHOOK_URL}
       - TELEGRAM_STEPS_EXPIRE=${TELEGRAM_STEPS_EXPIRE:-3600}
       - PUBLIC_DOMAIN=${PUBLIC_DOMAIN:-example.com}
@@ -64,10 +78,35 @@ services:
       - GOOGLE_SHEET_INTERVAL=${GOOGLE_SHEET_INTERVAL}
       - GOOGLE_SHEET_ID=${GOOGLE_SHEET_ID}
       - GOOGLE_SERVICE_ACCOUNT_JSON_BASE64=${GOOGLE_SERVICE_ACCOUNT_JSON_BASE64}
+      - GOOGLE_SHEET_LIST_NAME=${GOOGLE_SHEET_LIST_NAME}
+      - WATA_ACCESS_TOKEN=${WATA_ACCESS_TOKEN}
     depends_on:
+      - db-migrate
       - db
       - redis
-
+    networks:
+      - default
+  partner_bot:
+    image: localhost:5000/bot-a-partner-bot:latest
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - REDIS_URL=redis://redis:6379
+      - TELEGRAM_TOKEN_2=${TELEGRAM_TOKEN_2}
+      - TELEGRAM_WEBHOOK_URL_2=${TELEGRAM_WEBHOOK_URL_2}
+      - TELEGRAM_BOT_USERNAME=${TELEGRAM_BOT_USERNAME}
+      - ADMIN_IDS=${ADMIN_IDS}
+      - S3_ENDPOINT=${S3_ENDPOINT}
+      - S3_REGION=${S3_REGION}
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY}
+      - S3_SECRET_KEY=${S3_SECRET_KEY}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME}
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    depends_on:
+      - db-migrate
+      - db
+      - redis
+    networks:
+      - default
   db:
     image: postgres:15
     environment:
@@ -76,6 +115,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - postgres-data:/var/lib/postgresql/data
+    networks:
+      - default
 
   redis:
     image: redis:7
@@ -83,10 +124,11 @@ services:
       - redis-data:/data
       - ./redis.conf:/usr/local/etc/redis/redis.conf
     command: ['redis-server', '/usr/local/etc/redis/redis.conf']
+    networks:
+      - default
 
   minio:
     image: minio/minio:RELEASE.2023-05-04T21-44-30Z
-    container_name: minio
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
@@ -101,8 +143,53 @@ services:
       - 'traefik.http.services.minio.loadbalancer.server.port=9000'
       - 'traefik.http.middlewares.minio-strip.stripprefix.prefixes=/media'
       - 'traefik.http.routers.minio.middlewares=minio-strip'
+      - 'traefik.docker.network=traefik_net'
+    networks:
+      - default
+      - traefik_net
+  distribution:
+    image: localhost:5000/bot-a-distribution:latest
+    build:
+      context: .
+      args:
+        PUBLIC_DOMAIN: ${DISTRIBUTION_DOMAIN}
+      dockerfile: ./distribution/Dockerfile
+    restart: always
+    environment:
+      BODY_SIZE_LIMIT: 60M
+      NODE_ENV: production
+      PORT: 3000
+      PUBLIC_DOMAIN: ${DISTRIBUTION_DOMAIN}
+      ORIGIN: https://${DISTRIBUTION_DOMAIN}
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      TELEGRAM_TOKEN: ${TELEGRAM_TOKEN}
+      ADMIN_IDS: ${ADMIN_IDS}
+    labels:
+      - 'traefik.enable=true'
+      - 'traefik.docker.network=traefik_net'
+      - 'traefik.http.routers.neuro.rule=Host(`${DISTRIBUTION_DOMAIN}`)'
+      - 'traefik.http.routers.neuro.entrypoints=websecure'
+      - 'traefik.http.routers.neuro.tls.certresolver=le'
+      - 'traefik.http.services.neuro.loadbalancer.server.port=3000'
+      - 'traefik.http.routers.neuro.middlewares=neuro-compress,distribution-auth'
+      - 'traefik.http.middlewares.neuro-compress.compress=true'
+      - 'traefik.http.middlewares.distribution-auth.basicauth.users=${DISTRIBUTION_PASSWORD}'
+      - 'traefik.http.routers.neuro.priority=100'
+    networks:
+      - default
+      - traefik_net
+    depends_on:
+      redis:
+        condition: service_started
+      db:
+        condition: service_started
 
 volumes:
   postgres-data:
   redis-data:
   minio_data:
+
+networks:
+  traefik_net:
+    external: true

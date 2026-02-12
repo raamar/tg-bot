@@ -1,0 +1,67 @@
+import { OfferTemplate, OfferKey } from './types'
+
+export const offersConfig: Record<OfferKey, OfferTemplate> = {
+  main_full_price: {
+    id: 'main_full_price',
+    title: 'Гайд + чат: Как я заработал миллион на генерации ИИ-девушек',
+    currency: 'RUB',
+    lifetimeMinutes: 0,
+    phases: [{ startAfterMinutes: 0, price: 9990 }],
+  },
+  main_discount_50: {
+    id: 'main_discount_50',
+    title: 'Гайд со скидкой -50%',
+    currency: 'RUB',
+    lifetimeMinutes: 60 * 24,
+    phases: [{ startAfterMinutes: 0, price: 4990 }],
+  },
+  main_discount_50_2: {
+    id: 'main_discount_50_2',
+    title: 'Гайд со скидкой -50%',
+    currency: 'RUB',
+    lifetimeMinutes: 60 * 24,
+    phases: [{ startAfterMinutes: 0, price: 4990 }],
+  },
+  main_discount_50_3: {
+    id: 'main_discount_50_3',
+    title: 'Гайд со скидкой -50%',
+    currency: 'RUB',
+    lifetimeMinutes: 60 * 24,
+    phases: [{ startAfterMinutes: 0, price: 4990 }],
+  },
+  main_discount_50_4: {
+    id: 'main_discount_50_4',
+    title: 'Гайд со скидкой -50%',
+    currency: 'RUB',
+    lifetimeMinutes: 60 * 24,
+    phases: [{ startAfterMinutes: 0, price: 4990 }],
+  },
+  main_discount_50_5: {
+    id: 'main_discount_50_5',
+    title: 'Гайд со скидкой -50%',
+    currency: 'RUB',
+    lifetimeMinutes: 60 * 24,
+    phases: [{ startAfterMinutes: 0, price: 4990 }],
+  },
+  main_discount_50_6: {
+    id: 'main_discount_50_6',
+    title: 'Гайд со скидкой -50%',
+    currency: 'RUB',
+    lifetimeMinutes: 60 * 24,
+    phases: [{ startAfterMinutes: 0, price: 4990 }],
+  },
+  main_last_chance: {
+    id: 'main_last_chance',
+    title: 'Финальное предложение по гайду',
+    currency: 'RUB',
+    lifetimeMinutes: 60 * 24,
+    phases: [{ startAfterMinutes: 0, price: 4990 }],
+  },
+  main_last_chance_2: {
+    id: 'main_last_chance_2',
+    title: 'Финальное предложение по гайду',
+    currency: 'RUB',
+    lifetimeMinutes: 60 * 24,
+    phases: [{ startAfterMinutes: 0, price: 4990 }],
+  },
+}

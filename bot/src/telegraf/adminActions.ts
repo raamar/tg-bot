@@ -1,4 +1,5 @@
-// src/actions/admin.ts
+// bot/src/telegraf/adminActions.ts
+
 import { Markup } from 'telegraf'
 import { redis } from '../redis'
 import { AdminActionHandlerMap, BroadcastSession, CallbackContext, PhotoContext, TextContext } from '../types/admin'
@@ -8,9 +9,11 @@ import { bot } from '.'
 import { restoreHtmlFromEntities } from '../helpers/restoreHtmlFromEntities'
 import { isAdmin } from '../helpers/isAdmin'
 import { prisma } from '../prisma'
-import { generateUserExcelBuffer } from '../helpers/exportToExcel'
-import { funnelQueue } from '../funnel'
-import { funnelMessages } from '../config'
+import { reminderQueue } from '../reminders/scheduler'
+import { ReminderStatus } from '@app/db'
+import { confirmPaymentAndNotify } from '../payments/confirmPayment'
+import { exportUsersCsvToTempFile } from '../helpers/exportToCsv'
+import { blockCheckQueue } from '../blockCheck/scheduler'
 
 const getSession = async (ctx: { from?: { id: number } }): Promise<BroadcastSession | null> => {
   if (!ctx.from) return null
@@ -25,7 +28,7 @@ const updateSession = async (ctx: { from?: { id: number } }, session: BroadcastS
 
 const showMainMenu = async (
   ctx: TextContext | CallbackContext | PhotoContext,
-  session: BroadcastSession
+  session: BroadcastSession,
 ): Promise<void> => {
   const message = [
     `📊 <b>Рассылка</b>`,
@@ -75,6 +78,57 @@ const startBroadcasting = async (ctx: TextContext | CallbackContext, session: Br
 
 const adminActions: AdminActionHandlerMap = {
   commands: {
+    updateBlocked: async (ctx) => {
+      if (!isAdmin(ctx.from?.id)) {
+        await ctx.reply('У вас нет прав для выполнения этой команды')
+        return
+      }
+
+      const adminId = ctx.from?.id
+      const sessionKey = `admin:${adminId}:blockcheck`
+
+      // если уже идёт — не запускаем второй раз
+      const runningRaw = await redis.get(`${sessionKey}:running`)
+      if (runningRaw === '1') {
+        await ctx.reply('⏳ Проверка уже запущена. Нажмите "Остановить" в сообщении прогресса.')
+        return
+      }
+
+      const total = await prisma.user.count()
+
+      const msg = await ctx.replyWithHTML(
+        [
+          `<b>Проверка блокировок</b>`,
+          `⏳ В процессе`,
+          ``,
+          `Всего: <b>${total}</b>`,
+          `Обработано: <b>0</b>`,
+          `Осталось: <b>${total}</b>`,
+          ``,
+          `Blocked: <b>0</b>`,
+          `Unblocked: <b>0</b>`,
+        ].join('\n'),
+        Markup.inlineKeyboard([[Markup.button.callback('🛑 Остановить', 'blockcheck:stop')]]),
+      )
+
+      await redis.set(`${sessionKey}:running`, '1')
+      await redis.del(`${sessionKey}:stop`)
+
+      await blockCheckQueue.add(
+        `admin:${adminId}:${Date.now()}`,
+        {
+          mode: 'all',
+          sessionKey,
+          adminChatId: msg.chat.id,
+          adminMessageId: msg.message_id,
+        },
+        {
+          jobId: `blockcheck:admin:${adminId}`, // один активный на админа
+          removeOnComplete: true,
+          removeOnFail: false,
+        },
+      )
+    },
     broadcast: async (ctx) => {
       if (!isAdmin(ctx.from?.id)) {
         await ctx.reply('У вас нет прав для выполнения этой команды')
@@ -88,64 +142,83 @@ const adminActions: AdminActionHandlerMap = {
         JSON.stringify({
           step: 'AWAIT_FILE',
           contacts: [],
-        } as BroadcastSession)
+        } as BroadcastSession),
       )
     },
 
     stop: async (ctx) => {
-      const telegramId = String(ctx?.from?.id)
-
-      const user = await prisma.user.update({
-        where: { telegramId },
-        select: { id: true },
-        data: {
-          funnelProgress: {
-            update: {
-              nextJobId: null,
-              nextRunAt: null,
-            },
-          },
-        },
-      })
-
-      if (!user) {
+      const telegramId = String(ctx?.from?.id ?? '')
+      if (!telegramId) {
+        await ctx.reply('Не удалось определить пользователя')
         return
       }
 
-      const result = await Promise.allSettled(
-        funnelMessages.map(async ({ id: stageId }) => {
-          try {
-            const job = await funnelQueue.getJob(`funnel-${user.id}-${stageId}`)
-            if (job) {
-              return await job.remove()
-            }
+      // Находим пользователя
+      const user = await prisma.user.findUnique({
+        where: { telegramId },
+        select: { id: true },
+      })
 
-            return Promise.reject()
+      if (!user) {
+        await ctx.reply('Вы не участвуете в рассылке')
+        return
+      }
+
+      // Находим все ожидающие напоминания
+      const pendingReminders = await prisma.reminderSubscription.findMany({
+        where: {
+          userId: user.id,
+          status: ReminderStatus.PENDING,
+        },
+      })
+
+      const now = new Date()
+
+      const results = await Promise.allSettled(
+        pendingReminders.map(async (reminder) => {
+          try {
+            // Помечаем как отменённый
+            await prisma.reminderSubscription.update({
+              where: { id: reminder.id },
+              data: {
+                status: ReminderStatus.CANCELED,
+                canceledAt: now,
+              },
+            })
+
+            // Если есть привязанный BullMQ job — снимаем его
+            if (reminder.bullJobId) {
+              const job = await reminderQueue.getJob(reminder.bullJobId)
+              if (job) {
+                await job.remove()
+              }
+            }
           } catch (error) {
-            let message = error
+            let message: any = error
             if (error instanceof Error) {
               message = error.message
             }
-
-            console.error('ОШИБКА ПРИ /stop:', message)
-
-            return Promise.reject()
+            console.error('ОШИБКА ПРИ /stop (reminder cancel):', message)
+            return Promise.reject(error)
           }
-        })
+        }),
       )
 
+      // Чистим возможные ключи шагов/действий в redis (если ещё используются)
       const actionKeyPattern = `user:${telegramId}:action:*`
       const actionKeys = await redis.keys(actionKeyPattern)
       if (actionKeys.length > 0) {
         await redis.del(...actionKeys)
       }
 
-      if (result.filter((item) => item.status === 'fulfilled').length > 0) {
-        ctx.reply('Вы остановили рассылку.')
+      const hasCancelled = results.length > 0 && results.some((item) => item.status === 'fulfilled')
+
+      if (hasCancelled) {
+        await ctx.reply('Вы остановили рассылку.')
         return
       }
 
-      ctx.reply('Вы не учавствуете в рассылке')
+      await ctx.reply('Вы не участвуете в рассылке')
     },
 
     export: async (ctx) => {
@@ -154,24 +227,90 @@ const adminActions: AdminActionHandlerMap = {
         return
       }
 
-      await ctx.reply('⏳ Экспорт данных, пожалуйста подождите...')
+      await ctx.reply('⏳ Экспортирую данные в CSV...')
 
-      const users = await prisma.user.findMany({
-        include: {
-          funnelProgress: true,
-          payments: true,
-        },
-        orderBy: {
-          createdAt: 'asc',
-        },
-      })
+      try {
+        // batchSize можно подстроить (1000–5000 обычно норм)
+        const { filePath, filename, rows } = await exportUsersCsvToTempFile({
+          prisma,
+          batchSize: 2000,
+        })
 
-      const buffer = await generateUserExcelBuffer(users)
+        await ctx.replyWithDocument({
+          source: filePath, // путь — Telegraf сам прочитает файл
+          filename,
+        })
 
-      await ctx.replyWithDocument({
-        source: buffer,
-        filename: `users_export_${new Date().toISOString().slice(0, 10)}.xlsx`,
-      })
+        await ctx.reply(`✅ Готово. Строк: ${rows}`)
+      } catch (err: any) {
+        console.error('Ошибка при /export:', err)
+        const message = err instanceof Error ? err.message : String(err)
+        await ctx.reply(`❌ Ошибка при экспорте: ${message}`)
+      } finally {
+        // опционально можно удалить/отредактировать progressMsg — но не обязательно
+        // (если хочешь — скажи, добавлю editMessageText)
+      }
+    },
+
+    /**
+     * Ручное подтверждение оплаты:
+     * /paid <telegramId> <сумма>
+     *
+     * Примеры:
+     *   /paid 123456789 4990
+     *   /paid 123456789 4990.50
+     */
+    paid: async (ctx) => {
+      if (!isAdmin(ctx.from?.id)) {
+        await ctx.reply('У вас нет прав для выполнения этой команды')
+        return
+      }
+
+      const msg: any = ctx.message
+      const text: string | undefined = msg?.text
+      if (!text) {
+        await ctx.reply('Некорректная команда. Использование: /paid <telegramId> <сумма>')
+        return
+      }
+
+      const parts = text.trim().split(/\s+/)
+      // parts[0] = "/paid"
+      if (parts.length < 3) {
+        await ctx.reply('Использование: /paid <telegramId> <сумма>\nНапример: /paid 123456789 4990')
+        return
+      }
+
+      const telegramId = parts[1]
+      const amountRaw = parts.slice(2).join('') // разрешим писать сумму без лишних пробелов
+
+      if (!telegramId) {
+        await ctx.reply('Не указан telegramId. Использование: /paid <telegramId> <сумма>')
+        return
+      }
+
+      const normalized = amountRaw.replace(',', '.')
+      const amount = Number(normalized)
+
+      if (!Number.isFinite(amount) || amount <= 0) {
+        await ctx.reply(
+          'Сумма должна быть положительным числом.\nПримеры:\n' + '/paid 123456789 4990\n' + '/paid 123456789 4990.50',
+        )
+        return
+      }
+
+      try {
+        await confirmPaymentAndNotify(telegramId, amount, true)
+        await ctx.reply(
+          `✅ Платёж подтверждён.\n` +
+            `telegramId: ${telegramId}\n` +
+            `Сумма: ${amount.toFixed(2)} ₽\n` +
+            `Все напоминания и офферы для пользователя отключены.`,
+        )
+      } catch (err: any) {
+        console.error('Ошибка при ручном подтверждении оплаты через /paid:', err)
+        const message = err instanceof Error ? err.message : String(err)
+        await ctx.reply(`❌ Ошибка при подтверждении оплаты: ${message}`)
+      }
     },
   },
 
@@ -251,6 +390,21 @@ const adminActions: AdminActionHandlerMap = {
   },
 
   callbacks: {
+    'blockcheck:stop': async (ctx) => {
+      if (!isAdmin(ctx.from?.id)) {
+        await ctx.answerCbQuery('Нет прав').catch(() => {})
+        return
+      }
+
+      const adminId = ctx.from.id
+      const sessionKey = `admin:${adminId}:blockcheck`
+
+      await redis.set(`${sessionKey}:stop`, '1')
+      await redis.del(`${sessionKey}:running`)
+
+      await ctx.answerCbQuery('Останавливаю...').catch(() => {})
+      await ctx.reply('🛑 Остановка запрошена. Проверка завершится после текущего батча.')
+    },
     'broadcast:edit_text': async (ctx) => {
       const session = await getSession(ctx)
       if (!session || session.step !== 'MAIN_MENU') return

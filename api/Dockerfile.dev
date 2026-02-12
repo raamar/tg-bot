@@ -1,13 +1,21 @@
+
 FROM node:20-slim
 
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /app
-
 RUN npm install -g pnpm
 
-COPY package.json pnpm-lock.yaml ./
+WORKDIR /repo
 
-RUN pnpm install --frozen-lockfile
+# root workspace manifests + lockfile
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY api/package.json api/package.json
 
-CMD ["sh", "-c", "pnpm run dev"]
+# install deps only for api (workspace-aware)
+RUN pnpm install --frozen-lockfile --filter ./api...
+
+# В dev код будет монтироваться volume'ом, поэтому исходники COPY не обязательны.
+# Но можно оставить для случая запуска без volume:
+# COPY api ./api
+
+WORKDIR /repo/api
+CMD ["sh", "-lc", "pnpm dev"]
