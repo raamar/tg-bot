@@ -156,7 +156,7 @@ services:
       dockerfile: ./distribution/Dockerfile
     restart: always
     environment:
-      BODY_SIZE_LIMIT: 10M
+      BODY_SIZE_LIMIT: 60M
       NODE_ENV: production
       PORT: 3000
       PUBLIC_DOMAIN: ${DISTRIBUTION_DOMAIN}
