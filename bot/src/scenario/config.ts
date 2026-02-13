@@ -275,15 +275,7 @@ export const scenario: ScenarioConfig = {
         '\n\n<b>Общий чат:</b>\n',
         'https://t.me/+uQR-sD-bp1wwMjMy',
       ].join(''),
-      buttons: [
-        [
-          {
-            kind: 'system',
-            text: '👉 ‌Получить гайд 👈',
-            action: 'EXIT',
-          },
-        ],
-      ],
+      buttons: [],
     },
 
     // ----------------- ШАГИ-НАПОМИНАНИЯ -----------------
