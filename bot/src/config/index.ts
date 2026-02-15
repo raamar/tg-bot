@@ -76,14 +76,14 @@ export const actionsMessages: Record<Exclude<SendActionType, 'BUY_LINK' | 'DEFAU
     buttons: [{ text: '👉 Купить за 4.990₽ 👈', action: 'BUY_LINK', amount: 4990.0 }],
   },
   HAPPY_END: {
-    text: ['Спасибо за доверие! Получи доступ к гайду по ссылке ниже.\n\n'].join(''),
-    buttons: [
-      {
-        action: 'LINK',
-        text: '👉 Получить гайд 👈',
-        url: 'https://t.me/+-_lFHX1fFcliNDMy',
-      },
-    ],
+    text: [
+      '<b>Благодарю за доверие 🤝</b>\n\n',
+      '<b>Доступ к гайду:</b>\n',
+      'https://t.me/+psBJagCWnfZlYTIy',
+      '\n\n<b>Общий чат:</b>\n',
+      'https://t.me/+uQR-sD-bp1wwMjMy',
+    ].join(''),
+    buttons: [],
   },
   AGREE: {
     text: [
