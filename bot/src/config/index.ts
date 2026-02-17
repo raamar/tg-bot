@@ -79,7 +79,7 @@ export const actionsMessages: Record<Exclude<SendActionType, 'BUY_LINK' | 'DEFAU
     text: [
       '<b>Благодарю за доверие 🤝</b>\n\n',
       '<b>Доступ к гайду:</b>\n',
-      'https://t.me/+psBJagCWnfZlYTIy',
+      'https://t.me/+-_lFHX1fFcliNDMy',
       '\n\n<b>Общий чат:</b>\n',
       'https://t.me/+uQR-sD-bp1wwMjMy',
     ].join(''),
