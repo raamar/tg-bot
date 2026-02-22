@@ -217,14 +217,18 @@ model Partner {
   lastName   String?
 
   usdtWallet String?
+  recruitReferralId String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  referrals  PartnerReferral[]
-  withdrawals PartnerWithdrawal[]
+  referrals      PartnerReferral[]
+  withdrawals    PartnerWithdrawal[]
+  recruitReferral RecruitPartnerReferral? @relation("RecruitedPartners", fields: [recruitReferralId], references: [id])
+  recruitQualification RecruitPartnerQualification?
 
   @@index([telegramId])
+  @@index([recruitReferralId])
 }
 
 model PartnerReferral {
@@ -264,6 +268,89 @@ model PartnerWithdrawal {
 }
 
 enum PartnerWithdrawalStatus {
+  IN_REVIEW
+  APPROVED
+  REJECTED
+}
+
+model RecruitPartner {
+  id         String  @id @default(uuid())
+  telegramId String  @unique
+  username   String?
+  firstName  String?
+  lastName   String?
+
+  usdtWallet String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  referrals      RecruitPartnerReferral[]
+  withdrawals    RecruitPartnerWithdrawal[]
+  qualifications RecruitPartnerQualification[]
+
+  @@index([telegramId])
+}
+
+model RecruitPartnerReferral {
+  id        String         @id @default(uuid())
+  partner   RecruitPartner @relation(fields: [partnerId], references: [id])
+  partnerId String
+
+  code String @unique
+  name String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  invitedPartners Partner[] @relation("RecruitedPartners")
+  qualifications  RecruitPartnerQualification[]
+
+  @@index([partnerId])
+}
+
+model RecruitPartnerQualification {
+  id String @id @default(uuid())
+
+  recruitPartner   RecruitPartner         @relation(fields: [recruitPartnerId], references: [id])
+  recruitPartnerId String
+
+  recruitReferral   RecruitPartnerReferral @relation(fields: [recruitReferralId], references: [id])
+  recruitReferralId String
+
+  referredPartner   Partner @relation(fields: [referredPartnerId], references: [id])
+  referredPartnerId String  @unique
+
+  qualifiedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@index([recruitPartnerId])
+  @@index([recruitReferralId])
+  @@index([qualifiedAt])
+}
+
+model RecruitPartnerWithdrawal {
+  id        String         @id @default(uuid())
+  partner   RecruitPartner @relation(fields: [partnerId], references: [id])
+  partnerId String
+
+  amount Decimal                      @db.Decimal(10, 2)
+  status RecruitPartnerWithdrawalStatus @default(IN_REVIEW)
+  reason String?
+
+  receiptUrl String?
+  receiptKey String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  decidedAt DateTime?
+
+  @@index([partnerId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+enum RecruitPartnerWithdrawalStatus {
   IN_REVIEW
   APPROVED
   REJECTED

@@ -1,15 +1,10 @@
 {
-  "name": "bot",
+  "name": "recruit_partner_bot",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
   "scripts": {
     "dev": "nodemon --watch src --ext ts --exec ts-node src/worker.ts",
-    "backfill:recruit-qualifications": "ts-node --transpile-only src/scripts/backfillRecruitQualifications.ts",
-    "db:generate": "prisma generate --schema=./prisma/schema.prisma",
-    "db:migrate": "prisma migrate dev --schema=./prisma/schema.prisma",
-    "db:push": "prisma db push --schema=./prisma/schema.prisma",
-    "db:deploy": "prisma migrate deploy --schema=./prisma/schema.prisma",
     "build": "tsc",
     "start": "node dist/worker.js"
   },
@@ -18,13 +13,9 @@
   "license": "ISC",
   "packageManager": "pnpm@10.7.1",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.879.0",
     "@app/db": "workspace:*",
-    "@googleapis/sheets": "^11.1.0",
-    "axios": "^1.11.0",
     "bullmq": "5.56.6",
-    "date-fns-tz": "^3.2.0",
-    "exceljs": "^4.4.0",
-    "google-auth-library": "^10.2.1",
     "ioredis": "^5.6.1",
     "telegraf": "^4.16.3",
     "telegraf-throttler": "^0.6.0"

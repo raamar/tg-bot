@@ -17,3 +17,8 @@ export const telegramQueue2 = new Queue('telegram_bot2', {
   connection: redis,
   defaultJobOptions,
 })
+
+export const telegramQueue3 = new Queue('telegram_bot3', {
+  connection: redis,
+  defaultJobOptions,
+})

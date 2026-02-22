@@ -1,13 +1,15 @@
 import { Router } from 'express'
-import { telegramQueue1, telegramQueue2 } from '../queues/telegram'
+import { telegramQueue1, telegramQueue2, telegramQueue3 } from '../queues/telegram'
 
 const router = Router()
 
 const TOKEN_1 = process.env.TELEGRAM_TOKEN
 const TOKEN_2 = process.env.TELEGRAM_TOKEN_2
+const TOKEN_3 = process.env.TELEGRAM_TOKEN_3
 
 if (!TOKEN_1) throw new Error('TELEGRAM_TOKEN is not defined')
 if (!TOKEN_2) throw new Error('TELEGRAM_TOKEN_2 is not defined')
+if (!TOKEN_3) throw new Error('TELEGRAM_TOKEN_3 is not defined')
 
 router.post('/webhook/:token', async (req, res) => {
   const token = req.params.token
@@ -20,6 +22,11 @@ router.post('/webhook/:token', async (req, res) => {
 
   if (token === TOKEN_2) {
     await telegramQueue2.add('process-update', update)
+    return res.sendStatus(200)
+  }
+
+  if (token === TOKEN_3) {
+    await telegramQueue3.add('process-update', update)
     return res.sendStatus(200)
   }
 

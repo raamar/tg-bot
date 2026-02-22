@@ -9,6 +9,7 @@ import { inline_keyboard_generate } from '../helpers/inline_keyboard_generate'
 import { bot } from '../telegraf'
 import { getAdmins } from '../helpers/getAdmins'
 import { reminderQueue } from '../reminders/scheduler'
+import { ensureRecruitPartnerQualificationByUserId } from './recruitQualification'
 
 type SimpleUser = {
   id: string
@@ -153,6 +154,8 @@ export async function confirmPaymentAndNotify(telegramId: string, amount: number
   // 4. Гасим все напоминания и снимаем джобы из очереди
   await cancelRemindersForUser(user.id, now)
 
+  await ensureRecruitPartnerQualificationByUserId(user.id)
+
   if (skipNotify) {
     return
   }
@@ -229,6 +232,8 @@ export async function confirmPayment(paymentId: string): Promise<void> {
 
   // Гасим напоминания
   await cancelRemindersForUser(user.id, now)
+
+  await ensureRecruitPartnerQualificationByUserId(user.id)
 
   const amountNumber = Number(updatedPayment.amount)
   const currency = updatedPayment.currency || 'RUB'

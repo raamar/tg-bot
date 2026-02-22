@@ -1055,7 +1055,25 @@ bot.start(
   withErrorHandling(async (ctx) => {
     const from = ctx.from
     const telegramId = String(from?.id)
-    await ensurePartner(telegramId, from?.username, from?.first_name, from?.last_name)
+    const startText = ctx.message?.text
+    const recruitRefCode = startText?.split(' ')[1]?.trim()
+
+    const partner = await ensurePartner(telegramId, from?.username, from?.first_name, from?.last_name)
+
+    if (!partner.recruitReferralId && recruitRefCode) {
+      const recruitReferral = await prisma.recruitPartnerReferral.findUnique({
+        where: { code: recruitRefCode },
+        select: { id: true },
+      })
+
+      if (recruitReferral) {
+        await prisma.partner.update({
+          where: { id: partner.id },
+          data: { recruitReferralId: recruitReferral.id },
+        })
+      }
+    }
+
     await clearSession(telegramId)
     await sendMainMenu(ctx, { clearNotices: true })
   }),
