@@ -14,9 +14,12 @@ import {
 	saveBroadcastUiState,
 	moveDraftUiStateToBroadcast,
 	type BroadcastUiState,
+	type BroadcastMediaItem,
+	type BroadcastMediaMode,
 } from '$lib/server/broadcast'
 import { getDraftMedia, clearDraftMedia, type DraftMediaItem } from '$lib/server/mediaStore'
 import { uploadMedia, uploadMediaGroup } from '$lib/server/telegram'
+import { prepareVideoNoteMedia } from '$lib/server/videoNote'
 
 const require = createRequire(import.meta.url)
 const { prisma } = require('@app/db') as typeof import('@app/db')
@@ -63,6 +66,10 @@ const parseManualContacts = (value: string) => {
 	return sanitizeIds(lines)
 }
 
+const parseMediaMode = (value: string): BroadcastMediaMode => {
+	return value === 'video_note' ? 'video_note' : 'default'
+}
+
 const filterBlocked = async (contacts: string[]) => {
 	if (contacts.length === 0) {
 		return { allowed: [], blocked: [], notFound: [] }
@@ -101,12 +108,36 @@ const prepareMediaForBroadcast = async (
 	messageHtml: string,
 	messageText: string,
 	mediaChatId: string,
+	mediaMode: BroadcastMediaMode,
 ): Promise<{
-	media: { type: 'photo' | 'video'; fileId: string }[]
+	media: BroadcastMediaItem[]
 	captionMode: 'caption' | 'separate' | 'none'
 }> => {
 	if (mediaItems.length === 0) {
 		return { media: [], captionMode: 'none' as const }
+	}
+
+	if (mediaMode === 'video_note') {
+		if (mediaItems.length !== 1 || mediaItems[0].type !== 'video') {
+			throw new Error('INVALID_VIDEO_NOTE_MODE')
+		}
+		const prepared = await prepareVideoNoteMedia(mediaItems[0])
+		try {
+			const fileId = await uploadMedia(mediaChatId, { ...prepared, type: 'video_note' })
+			await _pushLog(
+				broadcastId,
+				'info',
+				prepared.transcoded
+					? 'Кружок перекодирован и загружен в Telegram. Получен file_id.'
+					: 'Кружок загружен в Telegram. Получен file_id.',
+			)
+			return {
+				media: [{ type: 'video_note', fileId }],
+				captionMode: messageText.length ? 'separate' : 'none',
+			}
+		} finally {
+			await prepared.cleanup()
+		}
 	}
 
 	const captionAllowed = messageText.length > 0 && messageText.length <= MAX_CAPTION_LENGTH
@@ -146,6 +177,7 @@ export const POST: RequestHandler = async ({ request }) => {
 	const messageText = stripHtml(messageHtml)
 	const delayMsRaw = Number(form.get('delayMs') ?? '100')
 	const delayMs = Number.isFinite(delayMsRaw) ? Math.max(delayMsRaw, MIN_DELAY_MS) : 500
+	const mediaMode = parseMediaMode(String(form.get('mediaMode') ?? 'default'))
 	const draftId = String(form.get('draftId') ?? '').trim() || null
 	const mediaKeysRaw = String(form.get('mediaKeys') ?? '')
 	const mediaKeys = mediaKeysRaw ? mediaKeysRaw.split(',').map((item) => item.trim()).filter(Boolean) : []
@@ -232,8 +264,11 @@ export const POST: RequestHandler = async ({ request }) => {
 	if (!messageText && mediaItems.length === 0) {
 		return json({ error: 'EMPTY_MESSAGE' }, { status: 400 })
 	}
+	if (mediaMode === 'video_note' && (mediaItems.length !== 1 || mediaItems[0]?.type !== 'video')) {
+		return json({ error: 'INVALID_VIDEO_NOTE_MODE' }, { status: 400 })
+	}
 
-	let preparedMedia: { type: 'photo' | 'video'; fileId: string }[] = []
+	let preparedMedia: BroadcastMediaItem[] = []
 	let captionMode: 'caption' | 'separate' | 'none' = 'none'
 	const adminIds = parseAdminIds()
 	const mediaChatId = adminIds[0]
@@ -242,15 +277,45 @@ export const POST: RequestHandler = async ({ request }) => {
 		if (!mediaChatId) {
 			return json({ error: 'NO_ADMIN_IDS', broadcastId }, { status: 400 })
 		}
-		const prepared = await prepareMediaForBroadcast(
-			broadcastId,
-			mediaItems,
-			messageHtml,
-			messageText,
-			mediaChatId,
-		)
-		preparedMedia = prepared.media
-		captionMode = prepared.captionMode
+		try {
+			const prepared = await prepareMediaForBroadcast(
+				broadcastId,
+				mediaItems,
+				messageHtml,
+				messageText,
+				mediaChatId,
+				mediaMode,
+			)
+			preparedMedia = prepared.media
+			captionMode = prepared.captionMode
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error)
+			if (message.includes('Unauthorized')) {
+				return json({ error: 'TELEGRAM_UNAUTHORIZED' }, { status: 400 })
+			}
+			if (message.includes('chat not found')) {
+				return json({ error: 'MEDIA_CHAT_NOT_FOUND' }, { status: 400 })
+			}
+			if (message === 'FFMPEG_NOT_AVAILABLE') {
+				return json({ error: 'FFMPEG_NOT_AVAILABLE' }, { status: 500 })
+			}
+			if (message === 'VIDEO_NOTE_TOO_LONG') {
+				return json({ error: 'VIDEO_NOTE_TOO_LONG' }, { status: 400 })
+			}
+			if (message === 'VIDEO_NOTE_UNSUPPORTED') {
+				return json({ error: 'VIDEO_NOTE_UNSUPPORTED' }, { status: 400 })
+			}
+			if (message === 'VIDEO_NOTE_PROBE_FAILED') {
+				return json({ error: 'VIDEO_NOTE_PROBE_FAILED' }, { status: 500 })
+			}
+			if (message === 'VIDEO_NOTE_TRANSCODE_FAILED') {
+				return json({ error: 'VIDEO_NOTE_TRANSCODE_FAILED' }, { status: 500 })
+			}
+			if (message === 'INVALID_VIDEO_NOTE_MODE') {
+				return json({ error: 'INVALID_VIDEO_NOTE_MODE' }, { status: 400 })
+			}
+			return json({ error: 'MEDIA_PREPARE_FAILED' }, { status: 500 })
+		}
 	}
 
 	await initBroadcastStatus({

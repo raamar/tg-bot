@@ -35,10 +35,12 @@
 		previewUrl: string;
 		size: number;
 	};
+	type MediaMode = 'default' | 'video_note';
 
 	type BroadcastState = {
 		step: number;
 		mode: Mode;
+		mediaMode: MediaMode;
 		messageHtml: string;
 		delayMs: number;
 		manualList: string;
@@ -63,6 +65,7 @@
 	type UiStatePayload = {
 		step: number;
 		mode: Mode | 'single';
+		mediaMode?: MediaMode;
 		messageHtml: string;
 		delayMs: number;
 		manualList: string;
@@ -74,6 +77,7 @@
 	let state = $state<BroadcastState>({
 		step: 1,
 		mode: 'manual',
+		mediaMode: 'default',
 		messageHtml: '',
 		delayMs: 100,
 		manualList: '',
@@ -198,9 +202,27 @@
 		if (state.delayMs < MIN_DELAY) state.delayMs = MIN_DELAY;
 	};
 
+	const mapStartError = (code: string) => {
+		if (code === 'TELEGRAM_UNAUTHORIZED') return 'Невалидный TELEGRAM_TOKEN для distribution.';
+		if (code === 'MEDIA_CHAT_NOT_FOUND') {
+			return 'Бот не может писать в media-chat. Проверь ADMIN_IDS и /start у бота.';
+		}
+		if (code === 'INVALID_VIDEO_NOTE_MODE') {
+			return 'Режим кружка доступен только для одного видео.';
+		}
+		if (code === 'FFMPEG_NOT_AVAILABLE') return 'ffmpeg/ffprobe не установлены в контейнере distribution.';
+		if (code === 'VIDEO_NOTE_TOO_LONG') return 'Видео слишком длинное для кружка (максимум 120 сек до обработки).';
+		if (code === 'VIDEO_NOTE_UNSUPPORTED') return 'Видео не поддерживается для кружка.';
+		if (code === 'VIDEO_NOTE_PROBE_FAILED') return 'Не удалось прочитать параметры видео (ffprobe).';
+		if (code === 'VIDEO_NOTE_TRANSCODE_FAILED') return 'Не удалось подготовить кружок (ffmpeg).';
+		if (code === 'MEDIA_PREPARE_FAILED') return 'Ошибка подготовки медиа перед рассылкой.';
+		return code || 'UNKNOWN';
+	};
+
 	const getUiStatePayload = (): UiStatePayload => ({
 		step: state.step,
 		mode: state.mode,
+		mediaMode: state.mediaMode,
 		messageHtml: state.messageHtml,
 		delayMs: state.delayMs,
 		manualList: state.manualList,
@@ -219,6 +241,7 @@
 		const safeMode = payload.mode === 'single' ? 'manual' : payload.mode;
 		state.step = payload.step;
 		state.mode = safeMode;
+		state.mediaMode = payload.mediaMode === 'video_note' ? 'video_note' : 'default';
 		state.messageHtml = payload.messageHtml;
 		state.delayMs = payload.delayMs;
 		state.manualList = payload.manualList;
@@ -306,6 +329,7 @@
 		try {
 			const form = new FormData();
 			form.set('mode', state.mode);
+			form.set('mediaMode', state.mediaMode);
 			form.set('messageHtml', state.messageHtml);
 			form.set('delayMs', String(state.delayMs));
 			if (state.draftId) form.set('draftId', state.draftId);
@@ -327,17 +351,17 @@
 			});
 
 			const data = await response.json();
-			if (!response.ok) {
-				if (response.status === 409 && data.broadcastId) {
-					state.broadcastId = data.broadcastId;
-					state.lockBroadcastId = data.broadcastId;
-					state.isLocked = true;
-					state.step = 3;
-					attachSse(data.broadcastId);
+				if (!response.ok) {
+					if (response.status === 409 && data.broadcastId) {
+						state.broadcastId = data.broadcastId;
+						state.lockBroadcastId = data.broadcastId;
+						state.isLocked = true;
+						state.step = 3;
+						attachSse(data.broadcastId);
+					}
+					state.errorMessage = `Ошибка запуска: ${mapStartError(String(data.error ?? 'UNKNOWN'))}`;
+					return;
 				}
-				state.errorMessage = `Ошибка запуска: ${data.error ?? 'UNKNOWN'}`;
-				return;
-			}
 
 			state.broadcastId = data.broadcastId;
 			state.lockBroadcastId = data.broadcastId;
@@ -643,6 +667,10 @@
 		state.editor?.chain().focus().unsetAllMarks().clearNodes().run();
 	};
 
+	const canUseVideoNote = $derived.by(
+		() => state.mediaItems.length === 1 && state.mediaItems[0]?.type === 'video'
+	);
+
 	const onLinkClick = () => {
 		toggleLink();
 	};
@@ -652,6 +680,13 @@
 		const stateValue = state.status?.state;
 		if ((stateValue === 'completed' || stateValue === 'stopped') && state.broadcastId) {
 			void loadErrors(state.broadcastId);
+		}
+	});
+
+	$effect(() => {
+		const allowed = canUseVideoNote;
+		if (!allowed && state.mediaMode === 'video_note') {
+			state.mediaMode = 'default';
 		}
 	});
 
@@ -668,6 +703,7 @@
 			broadcastId: state.broadcastId,
 			step: state.step,
 			mode: state.mode,
+			mediaMode: state.mediaMode,
 			messageHtml: state.messageHtml,
 			delayMs: state.delayMs,
 			manualList: state.manualList,
@@ -881,19 +917,35 @@
 						<button class="btn btn-ghost" onclick={clearMedia}>Очистить</button>
 					{/if}
 				</div>
-				<input
-					class="input"
-					type="file"
-					multiple
-					accept="image/*,video/*"
-					onchange={onFileChange}
-					disabled={state.isUploadingMedia || state.isLocked}
-				/>
-				<p class="input-help">До 10 файлов. Храним временно и отправляем как альбом.</p>
+					<input
+						class="input"
+						type="file"
+						multiple
+						accept="image/*,video/*"
+						onchange={onFileChange}
+						disabled={state.isUploadingMedia || state.isLocked}
+					/>
+					<p class="input-help">До 10 файлов. Храним временно и отправляем как альбом.</p>
+					<label class="flex items-center gap-2 text-sm text-text">
+						<input
+							type="checkbox"
+							checked={state.mediaMode === 'video_note'}
+							onchange={(event) => {
+								const target = event.currentTarget as HTMLInputElement;
+								state.mediaMode = target.checked ? 'video_note' : 'default';
+							}}
+							disabled={!canUseVideoNote || state.isLocked}
+						/>
+						Отправить как кружок (video note)
+					</label>
+					<p class="input-help">
+						Доступно только для одного видео. При необходимости видео будет автоматически приведено к формату
+						кружка. Текст отправляется отдельным сообщением.
+					</p>
 
-				{#if state.mediaItems.length > 0}
-					<div class="grid gap-3 sm:grid-cols-2">
-						{#each state.mediaItems as item}
+					{#if state.mediaItems.length > 0}
+						<div class="grid gap-3 sm:grid-cols-2">
+							{#each state.mediaItems as item}
 							<div class="rounded-md border border-border bg-surface-2 p-3">
 								{#if item.type === 'photo'}
 									{#if item.previewUrl}

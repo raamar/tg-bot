@@ -25,6 +25,8 @@ RUN pnpm build
 FROM node:20-alpine AS runner
 
 RUN corepack enable
+RUN apk add --no-cache ffmpeg
+RUN ffmpeg -version && ffprobe -version
 WORKDIR /repo
 
 ENV NODE_ENV=production

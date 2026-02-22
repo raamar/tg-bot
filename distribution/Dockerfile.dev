@@ -1,7 +1,8 @@
 FROM node:20-slim
 
 WORKDIR /repo
-RUN apt-get update && apt-get install -y curl openssl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y curl openssl ffmpeg && rm -rf /var/lib/apt/lists/*
+RUN ffmpeg -version && ffprobe -version
 RUN npm install -g pnpm
 
 ENV CHOKIDAR_USEPOLLING=true

@@ -3,6 +3,9 @@ import { getRedis, getRedisPub } from './redis'
 import { sendMediaByFileId, sendMediaGroupByFileIds, sendMessage } from './telegram'
 
 const BROADCAST_QUEUE = 'distribution_broadcast'
+export type BroadcastMediaType = 'photo' | 'video' | 'video_note'
+export type BroadcastMediaItem = { type: BroadcastMediaType; fileId: string }
+export type BroadcastMediaMode = 'default' | 'video_note'
 
 const DEFAULT_CONCURRENCY = 1
 const TTL_SECONDS = 60 * 60 * 10
@@ -35,7 +38,7 @@ export interface BroadcastJobData {
 	batchStart: number
 	batchSize: number
 	messageHtml: string
-	media: { type: 'photo' | 'video'; fileId: string }[]
+	media: BroadcastMediaItem[]
 	captionMode: 'caption' | 'separate' | 'none'
 	delayMs: number
 }
@@ -86,6 +89,7 @@ export interface BroadcastStatus {
 export interface BroadcastUiState {
 	step: number
 	mode: 'all' | 'all_unpaid' | 'csv' | 'manual'
+	mediaMode: BroadcastMediaMode
 	messageHtml: string
 	delayMs: number
 	manualList: string
@@ -228,7 +232,7 @@ const enqueueBatches = async (params: {
 	startIndex: number
 	total: number
 	messageHtml: string
-	media: { type: 'photo' | 'video'; fileId: string }[]
+	media: BroadcastMediaItem[]
 	captionMode: 'caption' | 'separate' | 'none'
 	delayMs: number
 }) => {
@@ -295,30 +299,37 @@ const ensureWorker = () => {
 
 				const contactId = batch[index]
 				const attemptStartedAt = Date.now()
-				try {
-					const interval = Math.max(delayMs, MIN_DELAY_MS)
-					if (media.length === 0) {
-						if (messageHtml) {
+					try {
+						const interval = Math.max(delayMs, MIN_DELAY_MS)
+						if (media.length === 0) {
+							if (messageHtml) {
+								await waitForRateLimit(interval)
+								await sendMessage(contactId, messageHtml)
+							}
+						} else if (media.length === 1) {
+							const caption = captionMode === 'caption' ? messageHtml : undefined
 							await waitForRateLimit(interval)
-							await sendMessage(contactId, messageHtml)
-						}
-					} else if (media.length === 1) {
-						const caption = captionMode === 'caption' ? messageHtml : undefined
-						await waitForRateLimit(interval)
-						await sendMediaByFileId(contactId, media[0], caption)
-						if (captionMode === 'separate' && messageHtml) {
+							await sendMediaByFileId(contactId, media[0], caption)
+							if (captionMode === 'separate' && messageHtml) {
+								await waitForRateLimit(interval)
+								await sendMessage(contactId, messageHtml)
+							}
+						} else {
+							const caption = captionMode === 'caption' ? messageHtml : undefined
 							await waitForRateLimit(interval)
-							await sendMessage(contactId, messageHtml)
+							await sendMediaGroupByFileIds(
+								contactId,
+								media.filter(
+									(item): item is { type: 'photo' | 'video'; fileId: string } =>
+										item.type === 'photo' || item.type === 'video',
+								),
+								caption,
+							)
+							if (captionMode === 'separate' && messageHtml) {
+								await waitForRateLimit(interval)
+								await sendMessage(contactId, messageHtml)
+							}
 						}
-					} else {
-						const caption = captionMode === 'caption' ? messageHtml : undefined
-						await waitForRateLimit(interval)
-						await sendMediaGroupByFileIds(contactId, media, caption)
-						if (captionMode === 'separate' && messageHtml) {
-							await waitForRateLimit(interval)
-							await sendMessage(contactId, messageHtml)
-						}
-					}
 
 					await redis.hincrby(keyStatus(broadcastId), 'success', 1)
 					await pushLog(broadcastId, 'info', `Отправлено ${contactId}.`)
@@ -520,7 +531,7 @@ export const queueBroadcast = async (data: {
 	broadcastId: string
 	contacts: string[]
 	messageHtml: string
-	media: { type: 'photo' | 'video'; fileId: string }[]
+	media: BroadcastMediaItem[]
 	captionMode: 'caption' | 'separate' | 'none'
 	delayMs: number
 }) => {
