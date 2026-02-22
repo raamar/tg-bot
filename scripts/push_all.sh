@@ -2,8 +2,8 @@
 set -euo pipefail
 
 PUSH_PORT="${1:-5000}"
-# REGISTRY_HOST="127.0.0.1:${PUSH_PORT}"
-REGISTRY_HOST="host.docker.internal:${PUSH_PORT}"
+REGISTRY_HOST="127.0.0.1:${PUSH_PORT}"
+# REGISTRY_HOST="host.docker.internal:${PUSH_PORT}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
@@ -30,8 +30,10 @@ build_image "bot-a-bot" "${ROOT_DIR}/bot/Dockerfile" &
 PID_BOT=$!
 build_image "bot-a-partner-bot" "${ROOT_DIR}/partner_bot/Dockerfile" &
 PID_PBOT=$!
+build_image "bot-a-recruit-partner-bot" "${ROOT_DIR}/recruit_partner_bot/Dockerfile" &
+PID_RPBOT=$!
 build_image "bot-a-distribution" "${ROOT_DIR}/distribution/Dockerfile" &
 PID_DIST=$!
 
-wait "${PID_API}" "${PID_DBM}" "${PID_BOT}" "${PID_PBOT}" "${PID_DIST}"
+wait "${PID_API}" "${PID_DBM}" "${PID_BOT}" "${PID_PBOT}" "${PID_RPBOT}" "${PID_DIST}"
 log "All buildx pushes completed"
