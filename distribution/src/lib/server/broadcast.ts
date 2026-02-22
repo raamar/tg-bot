@@ -85,10 +85,9 @@ export interface BroadcastStatus {
 
 export interface BroadcastUiState {
 	step: number
-	mode: 'all' | 'single' | 'csv' | 'manual'
+	mode: 'all' | 'all_unpaid' | 'csv' | 'manual'
 	messageHtml: string
 	delayMs: number
-	singleId: string
 	manualList: string
 	fileStats: { total: number; nonEmpty: number; unique: number; duplicates: number } | null
 	draftId: string | null

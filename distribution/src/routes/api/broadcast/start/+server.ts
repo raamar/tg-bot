@@ -63,10 +63,6 @@ const parseManualContacts = (value: string) => {
 	return sanitizeIds(lines)
 }
 
-const parseSingleContact = (value: string) => {
-	return sanitizeIds([value])
-}
-
 const filterBlocked = async (contacts: string[]) => {
 	if (contacts.length === 0) {
 		return { allowed: [], blocked: [], notFound: [] }
@@ -173,14 +169,18 @@ export const POST: RequestHandler = async ({ request }) => {
 			select: { telegramId: true },
 		})
 		contacts = users.map((user) => user.telegramId)
+	} else if (mode === 'all_unpaid') {
+		const users = await prisma.user.findMany({
+			where: { paid: false },
+			select: { telegramId: true },
+		})
+		contacts = users.map((user) => user.telegramId)
 	} else if (mode === 'csv') {
 		const file = form.get('contactsFile')
 		if (!file || !(file instanceof File)) {
 			return json({ error: 'CSV_REQUIRED' }, { status: 400 })
 		}
 		contacts = await parseTextContacts(file)
-	} else if (mode === 'single') {
-		contacts = parseSingleContact(String(form.get('singleId') ?? ''))
 	} else {
 		contacts = parseManualContacts(String(form.get('manualList') ?? ''))
 	}
