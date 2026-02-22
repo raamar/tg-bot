@@ -605,7 +605,7 @@ const sendMainMenu = async (ctx: any, opts?: { clearNotices?: boolean }) => {
     : '👛 USDT кошелёк: не указан'
 
   const textRows = [
-    '⚙️ <b>Меню партнёра (траферы)</b> ⚙️\n',
+    '⚙️ <b>Меню партнёра</b> ⚙️\n',
     `🔗 Реф. ссылок: ${formatCountUi(stats.items.length)}`,
     `👥 Приглашено траферов: ${formatCountUi(stats.totals.totalInvited)}`,
     `✅ Квалифицировано траферов: ${formatCountUi(stats.totals.totalQualified)}`,
@@ -1508,7 +1508,7 @@ const createWithdrawalRequest = async (ctx: any, partner: any, amount: Prisma.De
   const admins = process.env.ADMIN_IDS?.split(',').map(Number).filter(Boolean) || []
   if (admins.length) {
     const text = [
-      '🧾 Новая заявка на вывод (траферы)',
+      '🧾 Новая заявка на вывод',
       `ID: ${withdrawal.id}`,
       `Партнёр: ${partner.username || partner.telegramId}`,
       `Сумма: ${formatMoneyUi(withdrawal.amount)} ₽`,
