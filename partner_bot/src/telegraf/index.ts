@@ -176,13 +176,12 @@ const generateReferralCode = async (): Promise<string> => {
   throw new Error('Не удалось сгенерировать уникальную реф. ссылку')
 }
 
-const buildMainMenu = (admin: boolean, walletLabel: string, withdrawCount: number) => {
+const buildMainMenu = (admin: boolean, withdrawCount: number) => {
   const rows: Array<Array<ReturnType<typeof Markup.button.callback> | ReturnType<typeof Markup.button.url>>> = [
     [Markup.button.callback('🔄 Обновить статистику', 'REFRESH_STATS')],
     [Markup.button.callback('🔗 Реф. ссылки', 'REF_LIST')],
     [Markup.button.callback('🏆 ТОП партнёров', 'TOP_PARTNERS')],
     [Markup.button.callback('📊 Аналитика', 'ANALYTICS')],
-    [Markup.button.callback(walletLabel, 'WALLET_SET')],
     [Markup.button.callback('💸 Запросить вывод', 'WITHDRAW_REQUEST')],
   ]
 
@@ -193,9 +192,55 @@ const buildMainMenu = (admin: boolean, walletLabel: string, withdrawCount: numbe
     rows.push([Markup.button.callback('🧮 Изменить ставку реф. ссылки', 'ADMIN_RATE_REF')])
   }
 
-  rows.push([Markup.button.url('🛠 Тех. поддержка', 'https://t.me/only_neuro_chat')])
+  rows.push([Markup.button.url('ℹ️ Подробнее о проекте', 'https://t.me/ref_neuro_chat')])
 
   return Markup.inlineKeyboard(rows)
+}
+
+const buildWithdrawMenu = (partner: any, available: Prisma.Decimal, pendingCount: number) => {
+  const walletLabel = partner.usdtWallet ? '✏️ Изменить кошелёк' : '➕ Указать кошелёк'
+  const rows: Array<Array<ReturnType<typeof Markup.button.callback>>> = [[
+    Markup.button.callback(walletLabel, 'WITHDRAW_WALLET_SET'),
+  ]]
+
+  if (partner.usdtWallet) {
+    rows.push([Markup.button.callback('💸 Вывести всё', 'WITHDRAW_ALL')])
+    rows.push([Markup.button.callback('✍️ Ввести сумму', 'WITHDRAW_ENTER_AMOUNT')])
+  }
+
+  rows.push([Markup.button.callback('⬅️ Назад', 'MAIN_MENU')])
+
+  const warnings: string[] = []
+  if (!partner.usdtWallet) warnings.push('Укажите USDT кошелёк (TRC20), чтобы отправить заявку.')
+  if (pendingCount >= 2) warnings.push('У вас уже есть 2 заявки в ожидании.')
+  if (available.lte(0)) warnings.push('Сейчас нет доступного баланса для вывода.')
+
+  const textRows = ['<b>Вывод средств</b>']
+  textRows.push(`🎉 Доступно к выводу: ${formatMoneyUi(available)} ₽`)
+  textRows.push(`⏳ Заявок в ожидании: ${pendingCount}/2`)
+  textRows.push(partner.usdtWallet ? `👛 Кошелёк: ${escapeHtml(partner.usdtWallet)}` : '👛 Кошелёк: не указан')
+  if (warnings.length) {
+    textRows.push('')
+    warnings.forEach((warning) => textRows.push(`• ${warning}`))
+  }
+
+  return {
+    text: textRows.join('\n'),
+    keyboard: Markup.inlineKeyboard(rows),
+  }
+}
+
+const sendWithdrawRequestMenu = async (ctx: any) => {
+  await clearListForUser(ctx)
+  const telegramId = String(ctx.from.id)
+  const partner = await ensurePartner(telegramId)
+  const stats = await getPartnerStats(partner.id)
+  const pendingCount = await prisma.partnerWithdrawal.count({
+    where: { partnerId: partner.id, status: PartnerWithdrawalStatus.IN_REVIEW },
+  })
+
+  const menu = buildWithdrawMenu(partner, stats.totals.available, pendingCount)
+  await sendControlMessage(ctx, menu.text, menu.keyboard)
 }
 
 const getPartnerStats = async (partnerId: string) => {
@@ -388,10 +433,7 @@ const getPaidByRefForPeriod = async (
       where: {
         status: 'PAID',
         userId: { in: chunk },
-        OR: [
-          { paidAt: { gte: startUtc, lt: endUtc } },
-          { paidAt: null, createdAt: { gte: startUtc, lt: endUtc } },
-        ],
+        OR: [{ paidAt: { gte: startUtc, lt: endUtc } }, { paidAt: null, createdAt: { gte: startUtc, lt: endUtc } }],
       },
       select: { userId: true, amount: true, paidAt: true, createdAt: true },
       orderBy: [{ userId: 'asc' }, { paidAt: 'desc' }, { createdAt: 'desc' }],
@@ -792,20 +834,14 @@ const sendMainMenu = async (ctx: any, opts?: { clearNotices?: boolean }) => {
 
   const text = textRows.join('\n')
 
-  const walletLabel = partner.usdtWallet ? '✏️ Изменить кошелёк' : '➕ Указать кошелёк'
   await clearListForUser(ctx)
   if (opts?.clearNotices) {
     await clearNoticesForUser(ctx)
   }
-  await sendControlMessage(ctx, text, buildMainMenu(admin, walletLabel, withdrawCount))
+  await sendControlMessage(ctx, text, buildMainMenu(admin, withdrawCount))
 }
 
-const buildAnalyticsKeyboard = (
-  type: AnalyticsType,
-  offset: number,
-  hasPrev: boolean,
-  hasNext: boolean,
-) => {
+const buildAnalyticsKeyboard = (type: AnalyticsType, offset: number, hasPrev: boolean, hasNext: boolean) => {
   const activePrefix = '🔹 '
   const typeLabel = (key: AnalyticsType) => {
     if (key === 'MONTH') return 'Месяц'
@@ -867,9 +903,7 @@ const sendAnalytics = async (ctx: any, type: AnalyticsType, offset: number) => {
   if (admin) {
     rows.push(`🤝 Заработано на партнёрах: ${formatMoneyUi(adminRevenue ?? new Prisma.Decimal(0))} ₽`)
   }
-  const totalAll = admin
-    ? partnerStats.earnings.add(adminRevenue ?? new Prisma.Decimal(0))
-    : partnerStats.earnings
+  const totalAll = admin ? partnerStats.earnings.add(adminRevenue ?? new Prisma.Decimal(0)) : partnerStats.earnings
   rows.push(`🏆 Заработано всего за период: ${formatMoneyUi(totalAll)} ₽`)
 
   const keyboard = buildAnalyticsKeyboard(type, offset, hasPrev, hasNext)
@@ -920,7 +954,12 @@ const buildRefAnalyticsKeyboard = (
   return Markup.inlineKeyboard(rows)
 }
 
-const sendRefAnalytics = async (ctx: any, ref: { code: string; name?: string | null }, type: AnalyticsType, offset: number) => {
+const sendRefAnalytics = async (
+  ctx: any,
+  ref: { code: string; name?: string | null },
+  type: AnalyticsType,
+  offset: number,
+) => {
   const { startUtc, endUtc, startMskMs, label } = getPeriodRange(type, offset)
 
   const stats = await getReferralPeriodStats(ref.code, startUtc, endUtc)
@@ -1400,7 +1439,7 @@ bot.action(
     await clearListForUser(ctx)
     const telegramId = String(ctx.from.id)
     const partner = await ensurePartner(telegramId)
-    await setSession(telegramId, { action: 'SET_WALLET' })
+    await setSession(telegramId, { action: 'SET_WALLET', returnTo: 'MAIN_MENU' })
     const title = partner.usdtWallet ? 'Изменить кошелёк' : 'Указать кошелёк'
     const current = partner.usdtWallet ? `Текущий: ${escapeHtml(partner.usdtWallet)}\n` : ''
     await sendControlMessage(
@@ -1412,14 +1451,39 @@ bot.action(
 )
 
 bot.action(
+  'WITHDRAW_WALLET_SET',
+  withErrorHandling(async (ctx) => {
+    await ctx.answerCbQuery().catch(() => {})
+    await clearListForUser(ctx)
+    const telegramId = String(ctx.from.id)
+    const partner = await ensurePartner(telegramId)
+    await setSession(telegramId, { action: 'SET_WALLET', returnTo: 'WITHDRAW_MENU' })
+    const title = partner.usdtWallet ? 'Изменить кошелёк' : 'Указать кошелёк'
+    const current = partner.usdtWallet ? `Текущий: ${escapeHtml(partner.usdtWallet)}\n` : ''
+    await sendControlMessage(
+      ctx,
+      `<b>${title}</b>\n${current}Введите ваш USDT кошелёк в сети TRC20.`,
+      Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'WITHDRAW_REQUEST')]]),
+    )
+  }),
+)
+
+bot.action(
   'WITHDRAW_REQUEST',
+  withErrorHandling(async (ctx) => {
+    await ctx.answerCbQuery().catch(() => {})
+    await sendWithdrawRequestMenu(ctx)
+  }),
+)
+
+bot.action(
+  'WITHDRAW_ENTER_AMOUNT',
   withErrorHandling(async (ctx) => {
     await ctx.answerCbQuery().catch(() => {})
     await clearListForUser(ctx)
     const telegramId = String(ctx.from.id)
     const partner = await ensurePartner(telegramId)
     const stats = await getPartnerStats(partner.id)
-
     const pendingCount = await prisma.partnerWithdrawal.count({
       where: { partnerId: partner.id, status: PartnerWithdrawalStatus.IN_REVIEW },
     })
@@ -1427,7 +1491,19 @@ bot.action(
       await sendControlMessage(
         ctx,
         'У вас уже есть 2 заявки в ожидании. Дождитесь решения по ним.',
-        Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'MAIN_MENU')]]),
+        Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'WITHDRAW_REQUEST')]]),
+      )
+      return
+    }
+
+    if (!partner.usdtWallet) {
+      await sendControlMessage(
+        ctx,
+        'Сначала укажите USDT кошелёк в сети TRC20.',
+        Markup.inlineKeyboard([
+          [Markup.button.callback('➕ Указать кошелёк', 'WITHDRAW_WALLET_SET')],
+          [Markup.button.callback('⬅️ Назад', 'WITHDRAW_REQUEST')],
+        ]),
       )
       return
     }
@@ -1436,7 +1512,7 @@ bot.action(
       await sendControlMessage(
         ctx,
         'Сейчас нет доступного баланса для вывода.',
-        Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'MAIN_MENU')]]),
+        Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'WITHDRAW_REQUEST')]]),
       )
       return
     }
@@ -1447,7 +1523,7 @@ bot.action(
       `Введите сумму для вывода (доступно ${formatMoneyUi(stats.totals.available)} ₽) или нажмите «Вывести всё».`,
       Markup.inlineKeyboard([
         [Markup.button.callback('💸 Вывести всё', 'WITHDRAW_ALL')],
-        [Markup.button.callback('⬅️ Назад', 'MAIN_MENU')],
+        [Markup.button.callback('⬅️ Назад', 'WITHDRAW_REQUEST')],
       ]),
     )
   }),
@@ -1469,7 +1545,19 @@ bot.action(
       await sendControlMessage(
         ctx,
         'У вас уже есть 2 заявки в ожидании. Дождитесь решения по ним.',
-        Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'MAIN_MENU')]]),
+        Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'WITHDRAW_REQUEST')]]),
+      )
+      return
+    }
+
+    if (!partner.usdtWallet) {
+      await sendControlMessage(
+        ctx,
+        'Сначала укажите USDT кошелёк в сети TRC20.',
+        Markup.inlineKeyboard([
+          [Markup.button.callback('➕ Указать кошелёк', 'WITHDRAW_WALLET_SET')],
+          [Markup.button.callback('⬅️ Назад', 'WITHDRAW_REQUEST')],
+        ]),
       )
       return
     }
@@ -1478,7 +1566,7 @@ bot.action(
       await sendControlMessage(
         ctx,
         'Сейчас нет доступного баланса для вывода.',
-        Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'MAIN_MENU')]]),
+        Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'WITHDRAW_REQUEST')]]),
       )
       return
     }
@@ -1620,7 +1708,7 @@ bot.action(
     await setSession(String(ctx.from.id), { action: 'ADMIN_APPROVE_LINK', withdrawalId })
     await sendControlMessage(
       ctx,
-      'Введите ссылку на выплату в TronScan.',
+      'Введите данные транзакции в TronScan.',
       Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'MAIN_MENU')]]),
     )
   }),
@@ -1735,7 +1823,11 @@ bot.on(
       })
       await clearSession(telegramId)
       await sendNotice(ctx, 'Кошелёк сохранён')
-      await sendMainMenu(ctx)
+      if (session.returnTo === 'WITHDRAW_MENU') {
+        await sendWithdrawRequestMenu(ctx)
+      } else {
+        await sendMainMenu(ctx)
+      }
       await deleteUserMessage(ctx)
       return
     }
@@ -1781,6 +1873,20 @@ bot.on(
         await clearSession(telegramId)
         await sendNotice(ctx, 'Партнёр не найден')
         await sendMainMenu(ctx)
+        return
+      }
+
+      if (!partner.usdtWallet) {
+        await clearSession(telegramId)
+        await sendControlMessage(
+          ctx,
+          'Сначала укажите USDT кошелёк в сети TRC20.',
+          Markup.inlineKeyboard([
+            [Markup.button.callback('➕ Указать кошелёк', 'WITHDRAW_WALLET_SET')],
+            [Markup.button.callback('⬅️ Назад', 'WITHDRAW_REQUEST')],
+          ]),
+        )
+        await deleteUserMessage(ctx)
         return
       }
 
@@ -1963,7 +2069,7 @@ bot.on(
         [
           '✅ Ваша заявка на вывод одобрена!',
           `💸 Сумма: ${formatMoneyUi(withdrawal.amount)} ₽`,
-          `🔗 Ссылка на выплату: ${escapeHtml(linkText)}`,
+          `🔗 Данные транзакции: ${escapeHtml(linkText)}`,
           '<b>🔥 Ожидайте, выплата придёт в течении 5-30 минут!</b>',
         ].join('\n'),
         {

@@ -1,7 +1,7 @@
 import { redis } from '../redis'
 
 export type PartnerSession =
-  | { action: 'SET_WALLET' }
+  | { action: 'SET_WALLET'; returnTo?: 'MAIN_MENU' | 'WITHDRAW_MENU' }
   | { action: 'WITHDRAW_AMOUNT' }
   | { action: 'REF_NAME_CREATE'; referralId: string }
   | { action: 'REF_CREATE_MANUAL_CODE' }
