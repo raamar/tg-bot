@@ -177,10 +177,11 @@ const buildMainMenu = (admin: boolean, withdrawCount: number) => {
 
   if (admin) {
     const label = withdrawCount > 0 ? `🧾 Заявки на вывод (${withdrawCount})` : '🧾 Заявки на вывод'
+    rows.push([Markup.button.callback('🏆 ТОП партнёров', 'TOP_PARTNERS')])
     rows.push([Markup.button.callback(label, 'ADMIN_WITHDRAW_LIST')])
   }
 
-  rows.push([Markup.button.url('ℹ️ Подробнее о проекте', 'https://t.me/ref_neuro_chat')])
+  rows.push([Markup.button.url('ℹ️ Подробнее о проекте', 'https://t.me/only_noref')])
 
   return Markup.inlineKeyboard(rows)
 }
@@ -369,6 +370,45 @@ const getHasPrevPeriod = async (partnerId: string, type: AnalyticsType, startMsk
 
   const earliestStartMskMs = getPeriodStartMskMsForUtc(earliestDate, type)
   return startMskMs > earliestStartMskMs
+}
+
+const sendTopPartners = async (ctx: any) => {
+  const top = await prisma.recruitPartner.findMany({
+    include: {
+      _count: {
+        select: { qualifications: true },
+      },
+    },
+  })
+
+  const sorted = top
+    .map((item) => ({
+      ...item,
+      qualifiedCount: item._count.qualifications,
+      earnings: QUALIFIED_PARTNER_BONUS.mul(item._count.qualifications),
+    }))
+    .sort((a, b) => b.qualifiedCount - a.qualifiedCount)
+    .slice(0, 10)
+
+  const rows = ['🏆 <b>ТОП партнёров</b>', 'По количеству квалифицированных траферов', '']
+
+  if (!sorted.length) {
+    rows.push('Пока нет данных.')
+  } else {
+    sorted.forEach((item, index) => {
+      const label = item.username || item.telegramId
+      rows.push(
+        `${index + 1}. ${escapeHtml(String(label))} — ${formatCountUi(item.qualifiedCount)} квалиф. / ${formatMoneyUi(item.earnings)} ₽`,
+      )
+    })
+  }
+
+  await clearListForUser(ctx)
+  await sendControlMessage(
+    ctx,
+    rows.join('\n'),
+    Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'MAIN_MENU')]]),
+  )
 }
 
 const buildAnalyticsKeyboard = (type: AnalyticsType, offset: number, hasPrev: boolean, hasNext: boolean) => {
@@ -729,6 +769,20 @@ bot.action(
     await ctx.answerCbQuery().catch(() => {})
     await clearSession(String(ctx.from.id))
     await sendAnalytics(ctx, ANALYTICS_DEFAULT_TYPE, 0)
+  }),
+)
+
+bot.action(
+  'TOP_PARTNERS',
+  withErrorHandling(async (ctx) => {
+    await ctx.answerCbQuery().catch(() => {})
+    await clearSession(String(ctx.from.id))
+    if (!isAdmin(ctx.from?.id)) {
+      await sendNotice(ctx, 'Недостаточно прав')
+      await sendMainMenu(ctx)
+      return
+    }
+    await sendTopPartners(ctx)
   }),
 )
 
