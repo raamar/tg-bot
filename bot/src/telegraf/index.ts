@@ -216,7 +216,6 @@ bot.start(
             username,
             firstName: first_name,
             lastName: last_name,
-            refSource: ref,
             blockedByUser: false,
             blockedAt: null,
             blockReason: null,
