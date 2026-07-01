@@ -10,7 +10,8 @@ export async function processContactsFile(bot: Telegraf, fileId: string): Promis
       throw new Error('Invalid file extension')
     }
 
-    const fileUrl = `https://api.telegram.org/file/bot${process.env.TELEGRAM_TOKEN}/${file.file_path}`
+    const telegramApiRoot = (process.env.TELEGRAM_API_ROOT || 'https://api.telegram.org').replace(/\/+$/, '')
+    const fileUrl = `${telegramApiRoot}/file/bot${process.env.TELEGRAM_TOKEN}/${file.file_path}`
 
     // Ограничение времени загрузки
     const response = await axios.get(fileUrl, {

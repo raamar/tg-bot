@@ -29,7 +29,13 @@ if (process.env.TELEGRAM_WEBHOOK_URL_2 === undefined) {
   throw new Error('TELEGRAM_WEBHOOK_URL_2 is not defined')
 }
 
-export const bot = new Telegraf(process.env.TELEGRAM_TOKEN_2)
+const telegramApiRoot = (process.env.TELEGRAM_API_ROOT || 'https://api.telegram.org').replace(/\/+$/, '')
+
+export const bot = new Telegraf(process.env.TELEGRAM_TOKEN_2, {
+  telegram: {
+    apiRoot: telegramApiRoot,
+  },
+})
 const webhookUrl = new URL(process.env.TELEGRAM_WEBHOOK_URL_2)
 
 const throttler = telegrafThrottler({

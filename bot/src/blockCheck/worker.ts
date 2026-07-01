@@ -11,7 +11,8 @@ import { BLOCK_CHECK_QUEUE_NAME, type BlockCheckJobPayload } from './scheduler'
 const token = process.env.TELEGRAM_TOKEN
 if (!token) throw new Error('TELEGRAM_TOKEN is not defined')
 
-const telegram = new Telegram(token)
+const telegramApiRoot = (process.env.TELEGRAM_API_ROOT || 'https://api.telegram.org').replace(/\/+$/, '')
+const telegram = new Telegram(token, { apiRoot: telegramApiRoot })
 
 const REQUEST_TIMEOUT_MS = Number(process.env.BLOCKCHECK_TG_TIMEOUT_MS ?? '15000') // 15s
 const MIN_INTERVAL_MS = Number(process.env.BLOCKCHECK_MIN_INTERVAL_MS ?? '40') // ~25 req/s

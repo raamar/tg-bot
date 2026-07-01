@@ -14,8 +14,10 @@ const getTelegramToken = () => {
 	return token
 }
 
+const getTelegramApiRoot = () => (env.TELEGRAM_API_ROOT || 'https://api.telegram.org').replace(/\/+$/, '')
+
 const telegramRequest = async (method: string, body: URLSearchParams | FormData) => {
-	const response = await fetch(`https://api.telegram.org/bot${getTelegramToken()}/${method}`, {
+	const response = await fetch(`${getTelegramApiRoot()}/bot${getTelegramToken()}/${method}`, {
 		method: 'POST',
 		body,
 	})
